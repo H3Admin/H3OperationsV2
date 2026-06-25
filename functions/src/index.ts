@@ -41,7 +41,13 @@ export const onUserCreate = functions.auth.user().onCreate(async (user) => {
     }
 
     // Add user to the members subcollection
-    await db.collection("accounts").doc(accountId).collection("members").doc(uid).set({ role });
+    await db.collection("accounts").doc(accountId).collection("members").doc(uid).set({
+      uid,
+      role,
+      displayName: user.displayName ?? "",
+      email: normalizedEmail,
+      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     // Set custom claims
     await admin.auth().setCustomUserClaims(uid, { accountId, role });
@@ -65,7 +71,13 @@ export const onUserCreate = functions.auth.user().onCreate(async (user) => {
       .doc(accountId)
       .collection("members")
       .doc(uid)
-      .set({ role: "owner" });
+      .set({
+        uid,
+        role: "owner",
+        displayName: user.displayName ?? "",
+        email: normalizedEmail,
+        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
     // Set custom claims
     await admin.auth().setCustomUserClaims(uid, { accountId, role: "owner" });
