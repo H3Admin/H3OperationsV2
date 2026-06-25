@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAccountMember(accountId) {
+      return request.auth != null &&
+             request.auth.token.accountId == accountId;
+    }
+
+    function isAccountAdmin(accountId) {
+      return isAccountMember(accountId) &&
+             request.auth.token.role in ["owner", "admin"];
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isAccountMember(accountId);
+      allow write: if isAccountAdmin(accountId);
+
+      match /members/{uid} {
+        allow read: if isAccountMember(accountId);
+        allow write: if false;
+      }
+
+      match /customers/{customerId} {
+        allow read, write: if isAccountMember(accountId);
+      }
+    }
+
+    match /invites/{inviteId} {
+      allow create: if request.auth != null
+        && request.auth.token.accountId == request.resource.data.accountId
+        && request.resource.data.invitedBy == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.role in ['member', 'admin'];
+      allow read, update, delete: if false;
+    }
+  }
+}
