@@ -29,10 +29,13 @@ service cloud.firestore {
 
     match /invites/{inviteId} {
       allow create: if request.auth != null
-        && request.auth.token.accountId == request.resource.data.accountId
+        && request.resource.data.keys().hasAll(['email', 'accountId', 'role', 'status', 'createdAt', 'invitedBy'])
+        && request.resource.data.accountId is string
+        && exists(/databases/$(database)/documents/accounts/$(request.resource.data.accountId)/members/$(request.auth.uid))
         && request.resource.data.invitedBy == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.role in ['member', 'admin'];
+
       allow read, update, delete: if false;
     }
   }
