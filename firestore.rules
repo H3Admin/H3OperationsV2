@@ -25,6 +25,14 @@ service cloud.firestore {
       match /customers/{customerId} {
         allow read, write: if isAccountMember(accountId);
       }
+
+      match /phoneSettings/{settingId} {
+        allow read, write: if isAccountMember(accountId);
+      }
+
+      match /calls/{callId} {
+        allow read, write: if isAccountMember(accountId);
+      }
     }
 
     match /invites/{inviteId} {
