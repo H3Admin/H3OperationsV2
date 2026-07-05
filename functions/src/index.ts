@@ -21,14 +21,17 @@ function escapeTwiml(text: string): string {
 // Twilio signs the exact public URL it POSTs to, so we reconstruct it from this known base.
 const CF_BASE_URL = "https://us-central1-h3operations-prod.cloudfunctions.net";
 
-function validateTwilioSignature(req: any, authToken: string): boolean {
+function validateTwilioSignature(req: any, authToken: string, functionName: string): boolean {
   const signature = req.headers["x-twilio-signature"] as string;
   if (!signature) {
     console.warn("Missing x-twilio-signature header");
     return false;
   }
-  // req.originalUrl includes path + query string exactly as Twilio saw it
-  const fullUrl = `${CF_BASE_URL}${req.originalUrl}`;
+  // req.originalUrl inside Firebase v1 onRequest is relative to the function root ("/"),
+  // so the function name is absent. Reconstruct the full URL explicitly.
+  const qIndex = (req.originalUrl as string).indexOf("?");
+  const qs = qIndex !== -1 ? (req.originalUrl as string).slice(qIndex) : "";
+  const fullUrl = `${CF_BASE_URL}/${functionName}${qs}`;
   console.log("Validating Twilio signature for URL:", fullUrl);
   return twilio.validateRequest(authToken, signature, fullUrl, req.body);
 }
@@ -58,7 +61,7 @@ export const handleInboundCall = functions
     res.status(500).send("Configuration error");
     return;
   }
-  if (!validateTwilioSignature(req, authToken)) {
+  if (!validateTwilioSignature(req, authToken, "handleInboundCall")) {
     console.warn("Twilio signature validation failed");
     res.status(403).send("Forbidden");
     return;
@@ -164,7 +167,7 @@ export const handleSpeech = functions
     res.status(500).send("Configuration error");
     return;
   }
-  if (!validateTwilioSignature(req, authToken)) {
+  if (!validateTwilioSignature(req, authToken, "handleSpeech")) {
     console.warn("Twilio signature validation failed");
     res.status(403).send("Forbidden");
     return;
@@ -291,7 +294,7 @@ export const handleCallStatus = functions
     res.status(500).send("Configuration error");
     return;
   }
-  if (!validateTwilioSignature(req, authToken)) {
+  if (!validateTwilioSignature(req, authToken, "handleCallStatus")) {
     console.warn("Twilio signature validation failed");
     res.status(403).send("Forbidden");
     return;
