@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import twilio from "twilio";
+import nodemailer from "nodemailer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 admin.initializeApp();
@@ -20,10 +21,16 @@ function escapeTwiml(text: string): string {
 // Twilio signs the exact public URL it POSTs to, so we reconstruct it from this known base.
 const CF_BASE_URL = "https://us-central1-h3operations-prod.cloudfunctions.net";
 
-function buildTwilioUrl(functionName: string, originalUrl: string): string {
-  const qIndex = originalUrl.indexOf("?");
-  const qs = qIndex !== -1 ? originalUrl.slice(qIndex) : "";
-  return `${CF_BASE_URL}/${functionName}${qs}`;
+function validateTwilioSignature(req: any, authToken: string): boolean {
+  const signature = req.headers["x-twilio-signature"] as string;
+  if (!signature) {
+    console.warn("Missing x-twilio-signature header");
+    return false;
+  }
+  // req.originalUrl includes path + query string exactly as Twilio saw it
+  const fullUrl = `${CF_BASE_URL}${req.originalUrl}`;
+  console.log("Validating Twilio signature for URL:", fullUrl);
+  return twilio.validateRequest(authToken, signature, fullUrl, req.body);
 }
 
 /*
@@ -32,9 +39,6 @@ function buildTwilioUrl(functionName: string, originalUrl: string): string {
  * enforced by validating the X-Twilio-Signature header on every non-OPTIONS request
  * using the TWILIO_AUTH_TOKEN secret from Secret Manager. Any request that fails
  * signature validation receives a 403 before any Firestore reads occur.
- *
- * Set SKIP_TWILIO_VALIDATION=true in the function environment to bypass signature
- * checking during local/integration testing. Never set this in production.
  */
 export const handleInboundCall = functions
   .runWith({ invoker: "public", secrets: ["TWILIO_AUTH_TOKEN"] })
@@ -50,27 +54,14 @@ export const handleInboundCall = functions
 
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) {
-    functions.logger.error("handleInboundCall: twilio.auth_token not configured");
-    res.status(500).send("");
+    console.error("TWILIO_AUTH_TOKEN not set");
+    res.status(500).send("Configuration error");
     return;
   }
-
-  if (process.env.SKIP_TWILIO_VALIDATION === "true") {
-    functions.logger.warn("handleInboundCall: SKIP_TWILIO_VALIDATION is set — signature check bypassed");
-  } else {
-    const twilioSignature = req.headers["x-twilio-signature"] as string | undefined;
-    const url = buildTwilioUrl("handleInboundCall", req.originalUrl);
-    const isValid = !!twilioSignature && twilio.validateRequest(authToken, twilioSignature, url, req.body as Record<string, string>);
-    functions.logger.info("handleInboundCall: signature validation", {
-      url,
-      signaturePresent: !!twilioSignature,
-      isValid,
-    });
-    if (!isValid) {
-      functions.logger.warn("handleInboundCall: invalid Twilio signature", { url, twilioSignature });
-      res.status(403).send("");
-      return;
-    }
+  if (!validateTwilioSignature(req, authToken)) {
+    console.warn("Twilio signature validation failed");
+    res.status(403).send("Forbidden");
+    return;
   }
 
   functions.logger.info("handleInboundCall: incoming request", {
@@ -154,9 +145,6 @@ export const handleInboundCall = functions
  * Like handleInboundCall, this is PUBLIC (Twilio must reach it from the internet)
  * and secured by X-Twilio-Signature validation before any Firestore reads occur.
  * Gemini signals end-of-conversation by appending [DONE] to its response.
- *
- * Set SKIP_TWILIO_VALIDATION=true in the function environment to bypass signature
- * checking during local/integration testing. Never set this in production.
  */
 export const handleSpeech = functions
   .runWith({ invoker: "public", secrets: ["TWILIO_AUTH_TOKEN", "GEMINI_API_KEY"] })
@@ -172,27 +160,14 @@ export const handleSpeech = functions
 
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) {
-    functions.logger.error("handleSpeech: TWILIO_AUTH_TOKEN not configured");
-    res.status(500).send("");
+    console.error("TWILIO_AUTH_TOKEN not set");
+    res.status(500).send("Configuration error");
     return;
   }
-
-  if (process.env.SKIP_TWILIO_VALIDATION === "true") {
-    functions.logger.warn("handleSpeech: SKIP_TWILIO_VALIDATION is set — signature check bypassed");
-  } else {
-    const twilioSignature = req.headers["x-twilio-signature"] as string | undefined;
-    const url = buildTwilioUrl("handleSpeech", req.originalUrl);
-    const isValid = !!twilioSignature && twilio.validateRequest(authToken, twilioSignature, url, req.body as Record<string, string>);
-    functions.logger.info("handleSpeech: signature validation", {
-      url,
-      signaturePresent: !!twilioSignature,
-      isValid,
-    });
-    if (!isValid) {
-      functions.logger.warn("handleSpeech: invalid Twilio signature", { url, twilioSignature });
-      res.status(403).send("");
-      return;
-    }
+  if (!validateTwilioSignature(req, authToken)) {
+    console.warn("Twilio signature validation failed");
+    res.status(403).send("Forbidden");
+    return;
   }
 
   const twimlXmlHeader = '<?xml version="1.0" encoding="UTF-8"?>';
@@ -296,6 +271,192 @@ export const handleSpeech = functions
       `</Gather>`,
     );
   }
+});
+
+// TODO: After deploying, register this URL as the "Status Callback URL" on your Twilio
+// phone number in the Twilio Console (Phone Numbers → Manage → Active Numbers → select number):
+// https://us-central1-h3operations-prod.cloudfunctions.net/handleCallStatus
+// Set HTTP method to POST.
+export const handleCallStatus = functions
+  .runWith({ invoker: "public", secrets: ["TWILIO_AUTH_TOKEN", "GMAIL_APP_PASSWORD"] })
+  .https.onRequest(async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!authToken) {
+    console.error("TWILIO_AUTH_TOKEN not set");
+    res.status(500).send("Configuration error");
+    return;
+  }
+  if (!validateTwilioSignature(req, authToken)) {
+    console.warn("Twilio signature validation failed");
+    res.status(403).send("Forbidden");
+    return;
+  }
+
+  const { CallSid, CallStatus, CallDuration } = req.body as {
+    CallSid?: string;
+    CallStatus?: string;
+    CallDuration?: string;
+  };
+
+  if (!CallSid || !CallStatus) {
+    console.warn("handleCallStatus: missing CallSid or CallStatus", req.body);
+    res.status(400).send("Bad Request");
+    return;
+  }
+
+  const statusMap: Record<string, string> = {
+    completed: "completed",
+    "no-answer": "no_answer",
+    busy: "busy",
+    failed: "failed",
+    cancelled: "cancelled",
+  };
+  const mappedStatus = statusMap[CallStatus] ?? CallStatus;
+  const durationSeconds = parseInt(CallDuration || "0", 10);
+  const endedAt = admin.firestore.Timestamp.now();
+
+  const callSnap = await db
+    .collectionGroup("calls")
+    .where("callSid", "==", CallSid)
+    .limit(1)
+    .get();
+
+  if (callSnap.empty) {
+    console.warn(`handleCallStatus: no call doc found for CallSid ${CallSid}`);
+    res.status(200).send("OK");
+    return;
+  }
+
+  const callDoc = callSnap.docs[0];
+  const callData = callDoc.data();
+  const accountId = callDoc.ref.parent.parent!.id;
+
+  await callDoc.ref.update({ status: mappedStatus, durationSeconds, endedAt });
+
+  const phoneSettingsSnap = await db
+    .collection("accounts")
+    .doc(accountId)
+    .collection("phoneSettings")
+    .doc(accountId)
+    .get();
+  const phoneSettings = phoneSettingsSnap.data() ?? {};
+
+  if (phoneSettings.summaryEmailEnabled === true) {
+    const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
+    if (!gmailAppPassword) {
+      console.warn("handleCallStatus: GMAIL_APP_PASSWORD not set — skipping summary email");
+    } else {
+      const recipients: string[] = Array.isArray(phoneSettings.summaryEmailRecipients)
+        ? phoneSettings.summaryEmailRecipients
+        : [];
+
+      if (recipients.length > 0) {
+        const playbookSnap = await db
+          .collection("accounts")
+          .doc(accountId)
+          .collection("phonePlaybook")
+          .doc(accountId)
+          .get();
+        const playbookData = playbookSnap.data() ?? {};
+        const emailBusinessName =
+          typeof playbookData.businessName === "string" && playbookData.businessName
+            ? playbookData.businessName as string
+            : "your business";
+
+        const turns = (callData.turns ?? []) as Array<{ callerText: string; aiText: string }>;
+        const endedAtDate = endedAt.toDate();
+        const dateStr = endedAtDate.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+        const timeStr = endedAtDate.toLocaleTimeString("en-US");
+        const totalMinutes = Math.floor(durationSeconds / 60);
+        const remainingSeconds = durationSeconds % 60;
+
+        const conversationLines = turns
+          .map((t) => `Caller: ${t.callerText}\nAssistant: ${t.aiText}`)
+          .join("\n\n");
+
+        const emailBody = [
+          "New call received on your H3 Operations line.",
+          "",
+          `From: ${callData.from ?? "unknown"}`,
+          `Duration: ${totalMinutes} minutes ${remainingSeconds} seconds`,
+          `Status: ${mappedStatus}`,
+          `Time: ${dateStr} at ${timeStr}`,
+          "",
+          "Conversation summary:",
+          conversationLines || "(no conversation recorded)",
+          "",
+          "View full call log: https://h3operations.com/account/phone",
+          "",
+          "— H3 Operations",
+        ].join("\n");
+
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: "michael@h3operations.com",
+            pass: gmailAppPassword,
+          },
+        });
+
+        await transporter.sendMail({
+          from: "H3 Operations <michael@h3operations.com>",
+          to: recipients.join(", "),
+          subject: `Call summary — ${emailBusinessName} — ${dateStr}`,
+          text: emailBody,
+        });
+
+        console.log(`handleCallStatus: summary email sent to ${recipients.join(", ")}`);
+      }
+    }
+  }
+
+  res.status(200).send("OK");
+});
+
+// TODO: DELETE before launch — throwaway diagnostic function, not for production.
+export const debugPhoneData = functions
+  .runWith({ invoker: "public" })
+  .https.onRequest(async (req, res) => {
+  if (req.query.key !== "h3debug2026") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const [phoneSettingsSnap, phonePlaybookSnap] = await Promise.all([
+    db.collectionGroup("phoneSettings").get(),
+    db.collectionGroup("phonePlaybook").get(),
+  ]);
+
+  const phoneSettings = phoneSettingsSnap.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      path: doc.ref.path,
+      accountId: doc.ref.parent?.parent?.id ?? null,
+      twilioPhoneNumber: data.twilioPhoneNumber ?? null,
+      twilioPhoneNumberSid: data.twilioPhoneNumberSid ?? null,
+    };
+  });
+
+  const phonePlaybook = phonePlaybookSnap.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      path: doc.ref.path,
+      accountId: doc.ref.parent?.parent?.id ?? null,
+      businessName: data.businessName ?? null,
+      services: data.services ?? null,
+    };
+  });
+
+  res.status(200).json({ phoneSettings, phonePlaybook });
 });
 
 // Defines the roles that can be assigned to a user

@@ -17,9 +17,11 @@
     "@google/generative-ai": "^0.24.1",
     "firebase-admin": "^13.10.0",
     "firebase-functions": "^7.2.5",
+    "nodemailer": "^9.0.1",
     "twilio": "^6.0.2"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
     "typescript": "^6.0.3"
   },
   "private": true
