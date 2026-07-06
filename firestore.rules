@@ -33,6 +33,11 @@ service cloud.firestore {
       match /calls/{callId} {
         allow read, write: if isAccountMember(accountId);
       }
+
+      match /phonePlaybook/{docId} {
+        allow read: if isAccountMember(accountId);
+        allow write: if false;
+      }
     }
 
     match /invites/{inviteId} {
