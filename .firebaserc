@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "h3operations-prod"
-  }
+    "default": "h3operations-prod",
+    "H3PROD": "h3operations-prod"
+  },
+  "targets": {},
+  "etags": {}
 }
