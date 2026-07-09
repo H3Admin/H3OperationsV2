@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import customersSchema from "./schema/customers.js";
 
 admin.initializeApp();
 
@@ -506,4 +507,62 @@ export const onUserCreate = functions.auth.user().onCreate(async (user) => {
 
     functions.logger.info(`New account ${accountId} created for user ${uid}.`);
   }
+});
+
+/**
+ * createCustomer — callable that creates a customer under the caller's account.
+ *
+ * DECISION (2026-07): single canonical server-side write path. The CRM create
+ * form AND the future Receptionist->CRM handoff both go through the schema
+ * factory here rather than writing from the client, so buildNewCustomer is the
+ * one true validator. accountId + createdBy come from the verified auth token,
+ * never from client input (SECURITY: S2 server-boundary validation).
+ *
+ * Reads accountId from the caller's custom claim. Doc ID is derived from the
+ * phone via customerIdFromPhone (E.164 digits, no leading +). Rejects a phone
+ * that already exists (dedupe on the identity path).
+ */
+export const createCustomer = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  const accountId = context.auth?.token?.accountId as string | undefined;
+  if (!uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+  }
+  if (!accountId) {
+    throw new functions.https.HttpsError("failed-precondition", "No account on this user.");
+  }
+
+  const rawPhone = (data?.phone ?? "") as string;
+  const customerId = customersSchema.customerIdFromPhone(rawPhone);
+  if (!customerId) {
+    throw new functions.https.HttpsError("invalid-argument", "Enter a valid US phone number.");
+  }
+
+  const docRef = db
+    .collection("accounts").doc(accountId)
+    .collection("customers").doc(customerId);
+
+  const existing = await docRef.get();
+  if (existing.exists) {
+    throw new functions.https.HttpsError("already-exists", "A customer with this phone already exists.");
+  }
+
+  let body;
+  try {
+    body = customersSchema.buildNewCustomer({
+      accountId,
+      phone: rawPhone,
+      displayName: data?.displayName ?? null,
+      email: data?.email ?? null,
+      status: data?.status,
+      source: data?.source,
+      notes: data?.notes ?? null,
+      createdBy: uid,
+    });
+  } catch (err: any) {
+    throw new functions.https.HttpsError("invalid-argument", err.message ?? "Invalid customer data.");
+  }
+
+  await docRef.set(body);
+  return { customerId };
 });

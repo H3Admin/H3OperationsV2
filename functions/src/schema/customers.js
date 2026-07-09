@@ -293,3 +293,4 @@ module.exports = {
   // helpers (exported for unit tests)
   normalizeAddress,
 };
+module.exports.default = module.exports;

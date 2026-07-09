@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDPOxh2GU3kw0J2kFpzShM8A1UnL5dnu40",
@@ -15,5 +16,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+// Region must match the deployed callables (createCustomer is us-central1).
+const functions = getFunctions(app, "us-central1");
 
-export { app, auth, db };
+export { app, auth, db, functions };
