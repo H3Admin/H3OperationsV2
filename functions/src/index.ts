@@ -4,6 +4,7 @@ import twilio from "twilio";
 import nodemailer from "nodemailer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import customersSchema from "./schema/customers.js";
+import jobsSchema from "./schema/jobs.js";
 
 admin.initializeApp();
 
@@ -565,4 +566,115 @@ export const createCustomer = functions.https.onCall(async (data, context) => {
 
   await docRef.set(body);
   return { customerId };
+});
+
+/**
+ * createJob — callable that creates a job under the caller's account.
+ *
+ * DECISION (2026-07): single canonical server-side write path, mirroring
+ * createCustomer. buildNewJob is the one true validator; accountId + createdBy
+ * come from the verified auth token, never client input (SECURITY: S2).
+ *
+ * Unlike customers, a job has NO natural dedupe key — one customer has many
+ * jobs — so the doc ID is an auto-generated Firestore ID (docRef with no arg),
+ * not derived from any field. No existence check / dedupe here by design.
+ *
+ * Customer link (hybrid): if the caller supplies a customerPhone that normalizes,
+ * we derive and attach customerId via the SAME customerIdFromPhone the CRM uses,
+ * so a job booked for a known number links back to that customer record. If the
+ * phone doesn't resolve (or none given), the job still saves with a null link —
+ * booking a job must never be blocked on customer resolution.
+ */
+export const createJob = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  const accountId = context.auth?.token?.accountId as string | undefined;
+  if (!uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+  }
+  if (!accountId) {
+    throw new functions.https.HttpsError("failed-precondition", "No account on this user.");
+  }
+
+  // Best-effort customer link. A non-resolving phone is NOT an error here —
+  // it just means no CRM link (the phone snapshot itself is validated by the
+  // schema factory below, which throws only if a *malformed* phone was given).
+  const rawPhone = (data?.customerPhone ?? "") as string;
+  const linkedCustomerId = rawPhone
+    ? customersSchema.customerIdFromPhone(rawPhone)
+    : null;
+
+  let body;
+  try {
+    body = jobsSchema.buildNewJob({
+      accountId,
+      createdBy: uid,
+      customerId: (data?.customerId as string | undefined) ?? linkedCustomerId ?? null,
+      customerName: data?.customerName,
+      customerPhone: rawPhone || null,
+      customerEmail: data?.customerEmail ?? null,
+      service: data?.service,
+      scheduledAt: data?.scheduledAt, // Date | epoch millis | ISO string
+      status: data?.status,
+      source: data?.source,
+      durationMin: data?.durationMin ?? null,
+      assignee: data?.assignee ?? null,
+      serviceAddress: data?.serviceAddress ?? null,
+      notes: data?.notes ?? null,
+      priceCents: data?.priceCents ?? null,
+    });
+  } catch (err: any) {
+    throw new functions.https.HttpsError("invalid-argument", err.message ?? "Invalid job data.");
+  }
+
+  const docRef = db
+    .collection("accounts").doc(accountId)
+    .collection("jobs").doc(); // auto-generated ID
+
+  await docRef.set(body);
+  return { jobId: docRef.id };
+});
+
+/**
+ * updateJob — callable that applies a whitelisted partial update to a job.
+ *
+ * buildJobUpdate enforces the whitelist (identity fields ignored, updatedAt
+ * always stamped). accountId comes from the token; the job must belong to the
+ * caller's account or we 404 rather than leak cross-tenant existence.
+ */
+export const updateJob = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  const accountId = context.auth?.token?.accountId as string | undefined;
+  if (!uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+  }
+  if (!accountId) {
+    throw new functions.https.HttpsError("failed-precondition", "No account on this user.");
+  }
+
+  const jobId = (data?.jobId ?? "") as string;
+  if (!jobId) {
+    throw new functions.https.HttpsError("invalid-argument", "jobId is required.");
+  }
+
+  const docRef = db
+    .collection("accounts").doc(accountId)
+    .collection("jobs").doc(jobId);
+
+  const existing = await docRef.get();
+  if (!existing.exists) {
+    // Do not distinguish "wrong account" from "no such job" — both are 404.
+    throw new functions.https.HttpsError("not-found", "Job not found.");
+  }
+
+  let patch;
+  try {
+    patch = jobsSchema.buildJobUpdate({
+      ...(data?.patch ?? {}),
+    });
+  } catch (err: any) {
+    throw new functions.https.HttpsError("invalid-argument", err.message ?? "Invalid job update.");
+  }
+
+  await docRef.set(patch, { merge: true });
+  return { jobId };
 });
