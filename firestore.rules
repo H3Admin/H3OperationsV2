@@ -38,6 +38,15 @@ service cloud.firestore {
         allow read: if isAccountMember(accountId);
         allow write: if false;
       }
+
+      // Jobs are written ONLY through the createJob/updateJob callables (Admin SDK,
+      // which bypasses these Rules). Clients may read the board live via onSnapshot,
+      // but cannot write around the validator — the callable is the Rules-enforced
+      // single write path (SECURITY: S2). Mirrors the members/phonePlaybook posture.
+      match /jobs/{jobId} {
+        allow read: if isAccountMember(accountId);
+        allow write: if false;
+      }
     }
 
     match /invites/{inviteId} {
