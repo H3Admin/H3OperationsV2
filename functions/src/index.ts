@@ -278,6 +278,58 @@ export const handleSpeech = functions
   }
 });
 
+/**
+ * createLeadFromCall — internal Receptionist→CRM handoff writer.
+ *
+ * DECISION (2026-07): a DIRECT server-side helper, NOT a call to the
+ * createCustomer callable. handleCallStatus is a Twilio webhook, so it has no
+ * context.auth (the caller is Twilio's infrastructure, not a signed-in user) —
+ * the callable's auth + accountId-claim gate (S3) simply cannot be satisfied
+ * here. accountId is instead derived from the verified call-doc path, never from
+ * client input, so the server boundary (S2) still holds. buildNewCustomer stays
+ * the single schema authority (§2.2); we never hand-roll the document body.
+ * (Sharing this write path with createCustomer is deliberately NOT done in this
+ * slice — that refactor carries its own test surface.)
+ *
+ * DECISION (2026-07): write a MINIMAL lead (phone + system provenance) now,
+ * rather than extracting the caller's name / reason-for-call. A structured name
+ * does not exist yet — it lives only as free text inside callData.turns — so
+ * transcript extraction is a separate feature (its own Gemini pass + token cost,
+ * its own tests) and is deferred. This slice writes only what we can trust
+ * today: the phone number and the phone_call / receptionist source.
+ *
+ * Idempotent: existence-checks the doc first, so it neither clobbers an existing
+ * customer/lead nor duplicates on Twilio's up-to-3x status-callback retries.
+ */
+async function createLeadFromCall(accountId: string, phone: string): Promise<void> {
+  const customerId = customersSchema.customerIdFromPhone(phone);
+  if (!customerId) {
+    // Unparseable number — never attempt an empty-ID doc write. No PII logged (§9.2).
+    console.warn("createLeadFromCall: phone did not normalize; skipping lead creation");
+    return;
+  }
+
+  const docRef = db
+    .collection("accounts").doc(accountId)
+    .collection("customers").doc(customerId);
+
+  const existing = await docRef.get();
+  if (existing.exists) {
+    // Already a customer/lead (or a retried status callback) — do nothing.
+    return;
+  }
+
+  const body = customersSchema.buildNewCustomer({
+    accountId,
+    phone,
+    status: "lead",
+    source: customersSchema.CUSTOMER_SOURCE.PHONE_CALL,
+    createdBy: customersSchema.SYSTEM_ACTOR.RECEPTIONIST,
+  });
+
+  await docRef.set(body);
+}
+
 // TODO: After deploying, register this URL as the "Status Callback URL" on your Twilio
 // phone number in the Twilio Console (Phone Numbers → Manage → Active Numbers → select number):
 // https://us-central1-h3operations-prod.cloudfunctions.net/handleCallStatus
@@ -342,6 +394,28 @@ export const handleCallStatus = functions
   const accountId = callDoc.ref.parent.parent!.id;
 
   await callDoc.ref.update({ status: mappedStatus, durationSeconds, endedAt });
+
+  // Receptionist→CRM handoff, fully isolated from everything below it. Gate:
+  // a phone number to key the lead on + at least one spoken turn = an actionable
+  // call (skips pure hang-ups and empty-transcript bot drops). No transcript
+  // parsing / no Gemini — zero token cost. Its own try/catch swallows any failure
+  // so a CRM error can never break call handling, the summary email, or the 200.
+  if (
+    typeof callData.from === "string" &&
+    callData.from !== "" &&
+    Array.isArray(callData.turns) &&
+    callData.turns.length > 0
+  ) {
+    try {
+      await createLeadFromCall(accountId, callData.from);
+    } catch (err: any) {
+      // §9.2: CallSid + err.message only. The only buildNewCustomer throw that
+      // echoes the phone is the phone-normalize branch, which is unreachable here
+      // (customerIdFromPhone already validated it upstream) — never the transcript
+      // or any other PII.
+      console.error(`createLeadFromCall failed for CallSid ${CallSid}`, err?.message);
+    }
+  }
 
   const phoneSettingsSnap = await db
     .collection("accounts")
@@ -565,6 +639,77 @@ export const createCustomer = functions.https.onCall(async (data, context) => {
   }
 
   await docRef.set(body);
+  return { customerId };
+});
+
+/**
+ * updateCustomer — callable that applies a whitelisted partial update to a
+ * customer under the caller's account.
+ *
+ * DECISION (2026-07): NESTED payload shape — { customerId, patch } — mirroring
+ * updateJob one-to-one. This function was first written with a FLAT payload
+ * (mutable fields at the top level alongside customerId), which forced a local
+ * MUTABLE_KEYS loop to reconstruct a clean patch object before handing it to
+ * buildCustomerUpdate. That duplicated the allowlist — the six mutable keys
+ * lived both here AND inside buildCustomerUpdate's own whitelist — so a new
+ * field would have to be added in two places. Corrected to nested before
+ * commit, while nothing else depended on the flat shape yet: `patch` IS the
+ * clean object buildCustomerUpdate's contract expects, so we pass it straight
+ * through and the single source of truth for the whitelist stays in
+ * schema/customers.js.
+ *
+ * House pattern: nested-for-update / flat-for-create. Creates take flat
+ * payloads (createCustomer, createJob); updates take { id, patch }
+ * (updateJob, updateCustomer). buildCustomerUpdate ignores identity fields
+ * (phone / accountId / createdBy / createdAt), re-validates enums, and always
+ * stamps updatedAt.
+ *
+ * accountId + uid come from the verified auth token, never client input
+ * (SECURITY: S2 boundary validation, S3 auth/membership). The customer must
+ * belong to the caller's account or we 404 rather than leak cross-tenant
+ * existence (mirrors updateJob).
+ *
+ * @param {object} data              callable payload
+ * @param {string} data.customerId   doc id (E.164 digits, no "+"); required
+ * @param {object} [data.patch]      whitelisted mutable fields: displayName,
+ *                                    email, address, notes, status, source
+ * @returns {{ customerId: string }}
+ */
+export const updateCustomer = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  const accountId = context.auth?.token?.accountId as string | undefined;
+  if (!uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+  }
+  if (!accountId) {
+    throw new functions.https.HttpsError("failed-precondition", "No account on this user.");
+  }
+
+  const customerId = (data?.customerId ?? "") as string;
+  if (!customerId) {
+    throw new functions.https.HttpsError("invalid-argument", "customerId is required.");
+  }
+
+  const docRef = db
+    .collection("accounts").doc(accountId)
+    .collection("customers").doc(customerId);
+
+  const existing = await docRef.get();
+  if (!existing.exists) {
+    // Do not distinguish "wrong account" from "no such customer" — both are 404.
+    throw new functions.https.HttpsError("not-found", "Customer not found.");
+  }
+
+  let patch;
+  try {
+    patch = customersSchema.buildCustomerUpdate({
+      ...(data?.patch ?? {}),
+    });
+  } catch (err: any) {
+    throw new functions.https.HttpsError("invalid-argument", err.message ?? "Invalid customer update.");
+  }
+
+  await docRef.set(patch, { merge: true });
   return { customerId };
 });
 

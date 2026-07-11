@@ -22,8 +22,14 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Customers are written ONLY through the createCustomer/updateCustomer
+      // callables (Admin SDK, which bypasses these Rules), so those callables are
+      // the Rules-enforced single write path and the schema factories are the one
+      // true validator (SECURITY: S2). Clients may read live via onSnapshot but
+      // cannot write around the validator. Mirrors the jobs/members posture.
       match /customers/{customerId} {
-        allow read, write: if isAccountMember(accountId);
+        allow read: if isAccountMember(accountId);
+        allow write: if false;
       }
 
       match /phoneSettings/{settingId} {
