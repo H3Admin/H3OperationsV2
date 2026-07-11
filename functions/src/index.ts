@@ -132,7 +132,7 @@ export const handleInboundCall = functions
   );
 
   sendTwiml(
-    `<Gather input="speech" speechTimeout="auto" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
+    `<Gather input="speech" enhanced="true" speechModel="phone_call" speechTimeout="2" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
       `<Say voice="Polly.Joanna-Neural">${greetingText}</Say>` +
     `</Gather>`,
   );
@@ -193,7 +193,7 @@ export const handleSpeech = functions
   // Caller was silent — re-prompt without consuming a Gemini turn
   if (!SpeechResult) {
     sendTwiml(
-      `<Gather input="speech" speechTimeout="auto" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
+      `<Gather input="speech" enhanced="true" speechModel="phone_call" speechTimeout="2" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
         `<Say voice="Polly.Joanna-Neural">I'm sorry, I didn't catch that. Could you please repeat that?</Say>` +
       `</Gather>`,
     );
@@ -271,7 +271,7 @@ export const handleSpeech = functions
     sendTwiml(`<Say voice="Polly.Joanna-Neural">${spokenText}</Say><Hangup/>`);
   } else {
     sendTwiml(
-      `<Gather input="speech" speechTimeout="auto" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
+      `<Gather input="speech" enhanced="true" speechModel="phone_call" speechTimeout="2" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
         `<Say voice="Polly.Joanna-Neural">${spokenText}</Say>` +
       `</Gather>`,
     );
