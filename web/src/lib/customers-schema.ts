@@ -41,6 +41,22 @@ export const SOURCE_LABELS: Record<string, string> = {
   manual_entry: "Manual entry",
 };
 
+// Provenance of displayName — values match DISPLAY_NAME_SOURCE in the canonical
+// module. Distinguishes an AI-guessed name (from the receptionist call) from a
+// human-entered/confirmed one. null = no name, so no provenance.
+export const DISPLAY_NAME_SOURCE = {
+  AI_EXTRACTED: "ai_extracted",
+  MANUAL_ENTRY: "manual_entry",
+} as const;
+
+export type DisplayNameSource =
+  (typeof DISPLAY_NAME_SOURCE)[keyof typeof DISPLAY_NAME_SOURCE];
+
+export const DISPLAY_NAME_SOURCE_LABELS: Record<DisplayNameSource, string> = {
+  ai_extracted: "AI extracted",
+  manual_entry: "Manual entry",
+};
+
 // Shape of a customer document as READ from Firestore (the .id is the
 // Firestore doc id — E.164 digits without the leading "+").
 export interface Customer {
@@ -48,6 +64,7 @@ export interface Customer {
   accountId: string;
   phone: string;
   displayName: string | null;
+  displayNameSource: DisplayNameSource | null;
   email: string | null;
   address: {
     line1: string | null;

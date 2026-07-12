@@ -43,6 +43,16 @@ const SYSTEM_ACTOR = Object.freeze({
   RECEPTIONIST: 'system:receptionist',
 });
 
+// Provenance of `displayName`: was it guessed by the receptionist AI from a call
+// transcript, or entered/confirmed by a human? We record this because an
+// AI-extracted name is lower-trust than a human-confirmed one, and we want to
+// know which before ever surfacing these names customer-facing. null = no name,
+// so no provenance.
+const DISPLAY_NAME_SOURCE = Object.freeze({
+  AI_EXTRACTED: 'ai_extracted',
+  MANUAL_ENTRY: 'manual_entry',
+});
+
 const INTERACTION_TYPE = Object.freeze({
   CALL: 'call',
   NOTE: 'note',
@@ -53,6 +63,7 @@ const INTERACTION_TYPE = Object.freeze({
 const VALID_STATUSES = Object.freeze(Object.values(CUSTOMER_STATUS));
 const VALID_SOURCES = Object.freeze(Object.values(CUSTOMER_SOURCE));
 const VALID_INTERACTION_TYPES = Object.freeze(Object.values(INTERACTION_TYPE));
+const VALID_DISPLAY_NAME_SOURCES = Object.freeze(Object.values(DISPLAY_NAME_SOURCE));
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -62,6 +73,40 @@ function assertNonEmptyString(value, name) {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new Error(`${name} must be a non-empty string`);
   }
+}
+
+// Longest string we will accept as a person's display name. Anything longer is
+// almost certainly a sentence the model returned, not a name.
+const MAX_DISPLAY_NAME_LEN = 80;
+
+/**
+ * Sanitize an UNTRUSTED display-name string before it is stored — specifically
+ * the receptionist AI's extracted caller name. Per §8 S2 (server boundary: no
+ * LLM output in the data-integrity path), model output must never reach
+ * Firestore unvalidated. This is the one authority for that cleaning; callers
+ * pass raw model text through here rather than inlining their own rules.
+ *
+ * Returns a clean name, or null if the input is not a usable name:
+ *   - non-string                         -> null
+ *   - collapse internal whitespace, trim, strip wrapping quotes the model adds
+ *   - empty after trimming               -> null
+ *   - contains no letter (digits/punct)  -> null  (rejects junk like "N/A", "---")
+ *   - longer than MAX_DISPLAY_NAME_LEN   -> null  (a sentence, not a name)
+ *
+ * @param {*} raw
+ * @returns {string|null}
+ */
+function sanitizeDisplayName(raw) {
+  if (typeof raw !== 'string') return null;
+  const name = raw
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^["']+|["']+$/g, '')
+    .trim();
+  if (!name) return null;
+  if (!/\p{L}/u.test(name)) return null;
+  if (name.length > MAX_DISPLAY_NAME_LEN) return null;
+  return name;
 }
 
 /**
@@ -178,6 +223,7 @@ function buildNewCustomer(input = {}) {
     source = CUSTOMER_SOURCE.MANUAL_ENTRY,
     status = CUSTOMER_STATUS.LEAD,
     displayName = null,
+    displayNameSource = undefined,
     email = null,
     address = null,
     notes = null,
@@ -197,10 +243,29 @@ function buildNewCustomer(input = {}) {
     throw new Error(`buildNewCustomer: invalid source "${source}"`);
   }
 
+  // Provenance of the name. An explicit source (e.g. the receptionist handoff
+  // passing 'ai_extracted') wins; otherwise a name arriving through this factory
+  // came from a human path (the CRM create form), so default to 'manual_entry'.
+  // A null/absent name never carries a source.
+  let resolvedNameSource =
+    displayNameSource === undefined
+      ? (displayName ? DISPLAY_NAME_SOURCE.MANUAL_ENTRY : null)
+      : displayNameSource;
+  if (
+    resolvedNameSource !== null &&
+    !VALID_DISPLAY_NAME_SOURCES.includes(resolvedNameSource)
+  ) {
+    throw new Error(
+      `buildNewCustomer: invalid displayNameSource "${resolvedNameSource}"`,
+    );
+  }
+  if (!displayName) resolvedNameSource = null;
+
   return {
     accountId,
     phone: phoneE164,
     displayName,
+    displayNameSource: resolvedNameSource,
     email,
     address: normalizeAddress(address),
     status,
@@ -220,7 +285,16 @@ function buildNewCustomer(input = {}) {
 function buildCustomerUpdate(patch = {}) {
   const out = { updatedAt: FieldValue.serverTimestamp() };
 
-  if ('displayName' in patch) out.displayName = patch.displayName;
+  if ('displayName' in patch) {
+    out.displayName = patch.displayName;
+    // A human editing the name through the CRM (re)confirms it -> manual
+    // provenance; clearing it clears provenance. Derived here on the server so
+    // displayNameSource can never be set from client input (§8 S2). This is why
+    // displayNameSource itself is NOT a client-whitelisted key below.
+    out.displayNameSource = patch.displayName
+      ? DISPLAY_NAME_SOURCE.MANUAL_ENTRY
+      : null;
+  }
   if ('email' in patch) out.email = patch.email;
   if ('address' in patch) out.address = normalizeAddress(patch.address);
   if ('notes' in patch) out.notes = patch.notes;
@@ -275,12 +349,16 @@ module.exports = {
   CUSTOMER_SOURCE,
   SYSTEM_ACTOR,
   INTERACTION_TYPE,
+  DISPLAY_NAME_SOURCE,
   VALID_STATUSES,
   VALID_SOURCES,
   VALID_INTERACTION_TYPES,
+  VALID_DISPLAY_NAME_SOURCES,
   // phone
   normalizePhoneE164,
   customerIdFromPhone,
+  // sanitizers
+  sanitizeDisplayName,
   // paths
   customersCollectionPath,
   customerDocPath,

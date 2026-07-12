@@ -291,17 +291,56 @@ export const handleSpeech = functions
  * (Sharing this write path with createCustomer is deliberately NOT done in this
  * slice — that refactor carries its own test surface.)
  *
- * DECISION (2026-07): write a MINIMAL lead (phone + system provenance) now,
- * rather than extracting the caller's name / reason-for-call. A structured name
- * does not exist yet — it lives only as free text inside callData.turns — so
- * transcript extraction is a separate feature (its own Gemini pass + token cost,
- * its own tests) and is deferred. This slice writes only what we can trust
- * today: the phone number and the phone_call / receptionist source.
+ * DECISION (2026-07): enrich the lead with the caller's name via one Gemini pass
+ * over the transcript (Task B). The name lives only as free text in the turns, so
+ * we extract it, but treat the model output as UNTRUSTED: it is sanitized by the
+ * schema authority (customersSchema.sanitizeDisplayName) before it can reach
+ * Firestore (§8 S2 — no LLM output in the data path), and tagged with provenance
+ * displayNameSource='ai_extracted' so an AI-guessed name is never confused with a
+ * human-confirmed one. On no confident name, displayName AND displayNameSource
+ * stay null (the CRM Name column renders "—") — we never fabricate a value.
  *
  * Idempotent: existence-checks the doc first, so it neither clobbers an existing
- * customer/lead nor duplicates on Twilio's up-to-3x status-callback retries.
+ * customer/lead nor duplicates on Twilio's up-to-3x status-callback retries. The
+ * existence check also GATES the Gemini call, so retries and already-known
+ * customers cost zero tokens.
  */
-async function createLeadFromCall(accountId: string, phone: string): Promise<void> {
+async function extractCallerName(
+  turns: Array<{ callerText: string; aiText: string }>,
+  geminiApiKey: string | undefined,
+): Promise<string | null> {
+  // Best-effort enrichment. Any failure (missing key, model error, refusal)
+  // resolves to null so it can NEVER block lead creation.
+  if (!geminiApiKey) return null;
+  try {
+    const transcript = turns
+      .map((t) => `Caller: ${t.callerText}\nAssistant: ${t.aiText}`)
+      .join("\n");
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+    const prompt =
+      "From the following phone call transcript, extract ONLY the caller's own " +
+      "name if they clearly stated it. Respond with just the name and nothing " +
+      "else — no punctuation, no labels, no explanation. If the caller did not " +
+      "clearly give their name, respond with exactly: NONE\n\nTranscript:\n" +
+      transcript;
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    if (!text || text.toUpperCase() === "NONE") return null;
+    return text;
+  } catch (err: any) {
+    // Best-effort only — never block the lead. No transcript/PII logged (§9.2).
+    console.error("extractCallerName: extraction failed", err?.message);
+    return null;
+  }
+}
+
+async function createLeadFromCall(
+  accountId: string,
+  phone: string,
+  turns: Array<{ callerText: string; aiText: string }>,
+  geminiApiKey: string | undefined,
+): Promise<void> {
   const customerId = customersSchema.customerIdFromPhone(phone);
   if (!customerId) {
     // Unparseable number — never attempt an empty-ID doc write. No PII logged (§9.2).
@@ -315,9 +354,19 @@ async function createLeadFromCall(accountId: string, phone: string): Promise<voi
 
   const existing = await docRef.get();
   if (existing.exists) {
-    // Already a customer/lead (or a retried status callback) — do nothing.
+    // Already a customer/lead (or a retried status callback) — do nothing. This
+    // return also gates the Gemini call below: retries/known customers = 0 tokens.
     return;
   }
+
+  // Only now (creating a brand-new lead) do we spend a Gemini call. The result
+  // is untrusted model output, so it passes through the schema-authority
+  // sanitizer before storage; a null name carries a null provenance.
+  const rawName = await extractCallerName(turns, geminiApiKey);
+  const displayName = customersSchema.sanitizeDisplayName(rawName);
+  const displayNameSource = displayName
+    ? customersSchema.DISPLAY_NAME_SOURCE.AI_EXTRACTED
+    : null;
 
   const body = customersSchema.buildNewCustomer({
     accountId,
@@ -325,6 +374,8 @@ async function createLeadFromCall(accountId: string, phone: string): Promise<voi
     status: "lead",
     source: customersSchema.CUSTOMER_SOURCE.PHONE_CALL,
     createdBy: customersSchema.SYSTEM_ACTOR.RECEPTIONIST,
+    displayName,
+    displayNameSource,
   });
 
   await docRef.set(body);
@@ -335,7 +386,7 @@ async function createLeadFromCall(accountId: string, phone: string): Promise<voi
 // https://us-central1-h3operations-prod.cloudfunctions.net/handleCallStatus
 // Set HTTP method to POST.
 export const handleCallStatus = functions
-  .runWith({ invoker: "public", secrets: ["TWILIO_AUTH_TOKEN", "GMAIL_APP_PASSWORD"] })
+  .runWith({ invoker: "public", secrets: ["TWILIO_AUTH_TOKEN", "GMAIL_APP_PASSWORD", "GEMINI_API_KEY"] })
   .https.onRequest(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.status(204).send("");
@@ -407,7 +458,7 @@ export const handleCallStatus = functions
     callData.turns.length > 0
   ) {
     try {
-      await createLeadFromCall(accountId, callData.from);
+      await createLeadFromCall(accountId, callData.from, callData.turns, process.env.GEMINI_API_KEY);
     } catch (err: any) {
       // §9.2: CallSid + err.message only. The only buildNewCustomer throw that
       // echoes the phone is the phone-normalize branch, which is unreachable here

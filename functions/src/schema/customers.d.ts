@@ -12,11 +12,14 @@ declare const schema: {
   CUSTOMER_SOURCE: Record<string, string>;
   SYSTEM_ACTOR: Record<string, string>;
   INTERACTION_TYPE: Record<string, string>;
+  DISPLAY_NAME_SOURCE: Record<string, string>;
   VALID_STATUSES: string[];
   VALID_SOURCES: string[];
   VALID_INTERACTION_TYPES: string[];
+  VALID_DISPLAY_NAME_SOURCES: string[];
   normalizePhoneE164(raw: string): string | null;
   customerIdFromPhone(raw: string): string | null;
+  sanitizeDisplayName(raw: unknown): string | null;
   customersCollectionPath(accountId: string): string;
   customerDocPath(accountId: string, customerId: string): string;
   interactionsCollectionPath(accountId: string, customerId: string): string;

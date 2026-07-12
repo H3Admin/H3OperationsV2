@@ -178,6 +178,87 @@ test('buildCustomerUpdate: validates status/source when present', () => {
 });
 
 // ---------------------------------------------------------------------------
+// sanitizeDisplayName (untrusted LLM-extracted name cleaning — §8 S2)
+// ---------------------------------------------------------------------------
+
+test('sanitizeDisplayName: trims, collapses whitespace, strips wrapping quotes', () => {
+  assert.equal(c.sanitizeDisplayName('  John   Smith  '), 'John Smith');
+  assert.equal(c.sanitizeDisplayName('"Jane Doe"'), 'Jane Doe');
+  assert.equal(c.sanitizeDisplayName("'Bob'"), 'Bob');
+});
+
+test('sanitizeDisplayName: rejects empty, non-string, and letterless junk -> null', () => {
+  for (const raw of ['', '   ', null, undefined, 12345, {}, '---', '123 456', '!!!']) {
+    assert.equal(c.sanitizeDisplayName(raw), null, `input: ${String(raw)}`);
+  }
+});
+
+test('sanitizeDisplayName: rejects over-long input (a sentence, not a name) -> null', () => {
+  assert.equal(c.sanitizeDisplayName('a'.repeat(81)), null);
+  assert.equal(c.sanitizeDisplayName('a'.repeat(80)), 'a'.repeat(80)); // exactly at cap is ok
+});
+
+// ---------------------------------------------------------------------------
+// displayNameSource provenance (buildNewCustomer + buildCustomerUpdate)
+// ---------------------------------------------------------------------------
+
+test('buildNewCustomer: defaults displayNameSource to manual_entry when a name is present', () => {
+  const doc = c.buildNewCustomer({
+    accountId: 'a', phone: '2145550123', createdBy: 'u', displayName: 'Maria Lopez',
+  });
+  assert.equal(doc.displayName, 'Maria Lopez');
+  assert.equal(doc.displayNameSource, 'manual_entry');
+});
+
+test('buildNewCustomer: displayNameSource is null when no name is given', () => {
+  const doc = c.buildNewCustomer({ accountId: 'a', phone: '2145550123', createdBy: 'u' });
+  assert.equal(doc.displayName, null);
+  assert.equal(doc.displayNameSource, null);
+});
+
+test('buildNewCustomer: honors explicit ai_extracted provenance', () => {
+  const doc = c.buildNewCustomer({
+    accountId: 'a', phone: '2145550123', createdBy: 'u',
+    displayName: 'Sam', displayNameSource: c.DISPLAY_NAME_SOURCE.AI_EXTRACTED,
+  });
+  assert.equal(doc.displayNameSource, 'ai_extracted');
+});
+
+test('buildNewCustomer: a null name forces null provenance even if a source is passed', () => {
+  const doc = c.buildNewCustomer({
+    accountId: 'a', phone: '2145550123', createdBy: 'u',
+    displayName: null, displayNameSource: c.DISPLAY_NAME_SOURCE.AI_EXTRACTED,
+  });
+  assert.equal(doc.displayNameSource, null);
+});
+
+test('buildNewCustomer: throws on invalid displayNameSource', () => {
+  assert.throws(
+    () => c.buildNewCustomer({
+      accountId: 'a', phone: '2145550123', createdBy: 'u',
+      displayName: 'X', displayNameSource: 'robot',
+    }),
+    /invalid displayNameSource/,
+  );
+});
+
+test('buildCustomerUpdate: stamps manual_entry when a human sets the name, null when cleared', () => {
+  const set = c.buildCustomerUpdate({ displayName: 'Maria' });
+  assert.equal(set.displayName, 'Maria');
+  assert.equal(set.displayNameSource, 'manual_entry');
+
+  const cleared = c.buildCustomerUpdate({ displayName: null });
+  assert.equal(cleared.displayName, null);
+  assert.equal(cleared.displayNameSource, null);
+});
+
+test('buildCustomerUpdate: displayNameSource is server-derived, never client-settable', () => {
+  // A client forging provenance without editing the name is ignored (not whitelisted).
+  const out = c.buildCustomerUpdate({ displayNameSource: 'ai_extracted' });
+  assert.ok(!('displayNameSource' in out));
+});
+
+// ---------------------------------------------------------------------------
 // buildInteraction
 // ---------------------------------------------------------------------------
 
