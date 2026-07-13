@@ -5,6 +5,7 @@ import nodemailer from "nodemailer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import customersSchema from "./schema/customers.js";
 import jobsSchema from "./schema/jobs.js";
+import smsOptinsSchema from "./schema/smsOptins.js";
 
 admin.initializeApp();
 
@@ -874,3 +875,105 @@ export const updateJob = functions.https.onCall(async (data, context) => {
   await docRef.set(patch, { merge: true });
   return { jobId };
 });
+
+// Origins allowed to call submitSmsOptin from a browser. The consent form is a
+// static page on the marketing site; reflect an allowlisted Origin back so we
+// don't run a blanket wildcard on a PII-writing endpoint.
+const SMS_OPTIN_ALLOWED_ORIGINS = new Set([
+  "https://h3operations.com",
+  "https://www.h3operations.com",
+]);
+
+/**
+ * submitSmsOptin — public HTTPS endpoint backing the static /sms-optin form.
+ *
+ * PUBLIC by design (unauthenticated, pre-account marketing capture), so it uses
+ * the same guarded-public onRequest posture as the Twilio webhooks:
+ * invoker:"public" plus explicit CORS. maxInstances caps cost on this low-traffic
+ * path (§8 S4). CORS is not a security boundary here (any server can POST) — the
+ * real boundary is server-side validation below (§8 S2): consent must be an
+ * explicit true, and the phone must pass the SAME NANP normalizer the CRM uses
+ * (customersSchema.customerIdFromPhone) — client validation is UX only.
+ *
+ * The consent record is written at root smsOptins/{phoneDigits} (see
+ * schema/smsOptins.js for the pre-account / doc-ID-matches-customers rationale).
+ * Idempotent: a repeat submit for the same number re-affirms consent and moves
+ * updatedAt, but preserves the original createdAt as the audit anchor.
+ */
+export const submitSmsOptin = functions
+  .runWith({ invoker: "public", maxInstances: 5 })
+  .https.onRequest(async (req, res) => {
+    const origin = req.headers.origin as string | undefined;
+    res.set(
+      "Access-Control-Allow-Origin",
+      origin && SMS_OPTIN_ALLOWED_ORIGINS.has(origin) ? origin : "https://h3operations.com",
+    );
+    res.set("Vary", "Origin");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).send("Method not allowed");
+      return;
+    }
+
+    const { phone, consent, consentCopyVersion, ref } = (req.body ?? {}) as {
+      phone?: string;
+      consent?: boolean;
+      consentCopyVersion?: string;
+      ref?: string;
+    };
+
+    // Consent must be an explicit true — never inferred from presence of a phone.
+    if (consent !== true) {
+      res.status(400).send("Consent is required.");
+      return;
+    }
+
+    // Reuse the CRM phone normalizer so a consent record and a future customer
+    // keyed by the same number share one doc-ID shape (E.164 digits, no "+").
+    const rawPhone = phone ?? "";
+    const docId = customersSchema.customerIdFromPhone(rawPhone);
+    const phoneE164 = customersSchema.normalizePhoneE164(rawPhone);
+    if (!docId || !phoneE164) {
+      res.status(400).send("Enter a valid US phone number.");
+      return;
+    }
+
+    // Build the first-write body now; this also validates consentCopyVersion via
+    // the schema factory regardless of which write path we take below.
+    let firstWriteBody;
+    try {
+      firstWriteBody = smsOptinsSchema.buildNewSmsOptin({
+        phone: phoneE164,
+        consentCopyVersion,
+        ref: ref ?? null,
+      });
+    } catch {
+      res.status(400).send("Invalid request.");
+      return;
+    }
+
+    try {
+      const docRef = db.collection(smsOptinsSchema.SMS_OPTINS_COLLECTION).doc(docId);
+      const existing = await docRef.get();
+      if (existing.exists) {
+        // Re-affirm without clobbering the original consent timestamp.
+        await docRef.set(
+          smsOptinsSchema.buildSmsOptinRefresh({ consentCopyVersion, ref: ref ?? null }),
+          { merge: true },
+        );
+      } else {
+        await docRef.set(firstWriteBody);
+      }
+      res.status(200).send("OK");
+    } catch (err: any) {
+      // No PII in logs (§9.2) — log the failure, not the phone number.
+      console.error("submitSmsOptin failed", err?.message);
+      res.status(500).send("Something went wrong.");
+    }
+  });

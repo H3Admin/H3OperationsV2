@@ -66,5 +66,13 @@ service cloud.firestore {
 
       allow read, update, delete: if false;
     }
+
+    // SMS consent records, captured pre-account on the public marketing site and
+    // written ONLY through the submitSmsOptin function (Admin SDK bypasses these
+    // Rules). This is consent PII / Twilio verification evidence — no client may
+    // read or write it. Mirrors the members/customers/jobs server-only posture.
+    match /smsOptins/{phoneDigits} {
+      allow read, write: if false;
+    }
   }
 }
