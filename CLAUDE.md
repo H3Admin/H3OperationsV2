@@ -1,5 +1,7 @@
 # H3 Operations — Project Context
 
+@./CODING_STANDARDS.md
+
 ## Stack
 
 - **Frontend:** TanStack Start + TanStack Router (file-based routing), React 19, TypeScript, Vite 8, Tailwind v4
