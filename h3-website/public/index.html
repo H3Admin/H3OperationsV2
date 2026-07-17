@@ -3,737 +3,441 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>H3 Operations — Stop losing jobs. The front office for service businesses.</title>
-<meta name="description" content="H3 Operations gets you found, captures every lead, answers every call, quotes fast, and books the job — one platform for service businesses. Join early access." />
-
-<!-- ============================================================
-     Open Graph / share preview — swap og:image once we have a real one
-     ============================================================ -->
-<meta property="og:title" content="H3 Operations — Stop losing jobs." />
-<meta property="og:description" content="The front office for service businesses. Get found, answer every call, capture every lead, quote fast, book the job — all in one place." />
-<meta property="og:type" content="website" />
-<meta property="og:url" content="https://h3operations.com" />
-
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-
-<!-- ============================================================
-     GA4 — TRACKING SCAFFOLD
-     Replace G-BJ9W0HYPQ6 with the real GA4 Measurement ID before
-     this page goes live. Until then this snippet loads nothing
-     harmful, it just won't report (gtag no-ops silently to a
-     placeholder ID).
-     ============================================================ -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-BJ9W0HYPQ6"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-BJ9W0HYPQ6');
-</script>
-
-<!-- ============================================================
-     META PIXEL — TRACKING SCAFFOLD
-     Replace YOUR_PIXEL_ID before going live.
-     ============================================================ -->
-<script>
-  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-  document,'script','https://connect.facebook.net/en_US/fbevents.js');
-  fbq('init', 'YOUR_PIXEL_ID');
-  fbq('track', 'PageView');
-</script>
-
+<title>H3 Operations — Never miss a call. Never lose a lead.</title>
+<meta name="description" content="H3 Operations answers every call and captures every lead for home &amp; field service businesses — one platform, built to run the whole operation." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
 <style>
   /* ============================================================
-     DESIGN TOKENS — pulled verbatim from h3-design-system.html.
-     Do not introduce off-system colors, fonts, or spacing values.
+     H3 OPERATIONS — "OPERATOR BLUE" tokens
+     Canonical source: h3-operations-style-guide.html (project root [VERIFY path])
      ============================================================ */
-  :root {
+  :root{
     --navy:        #0B2A4A;
     --blue:        #1554C8;
     --blue-bright: #2E7BFF;
     --coral:       #FF6B5E;
-    --ink:         #11202F;
-    --muted:       #586674;
-    --line:        #E4EAF1;
-    --tint:        #F2F7FE;
-    --bg:          #FFFFFF;
-
-    --font-display: 'Space Grotesk', sans-serif;
-    --font-body:    'Inter', sans-serif;
-
-    --text-xs:   0.75rem;
-    --text-sm:   0.875rem;
-    --text-base: 1rem;
-    --text-lg:   1.125rem;
-    --text-xl:   1.25rem;
-    --text-2xl:  1.5rem;
-    --text-3xl:  1.875rem;
-    --text-4xl:  2.25rem;
-    --text-5xl:  3rem;
-    --text-6xl:  3.75rem;
-
-    --weight-regular: 400;
-    --weight-medium:  500;
-    --weight-semibold:600;
-    --weight-bold:    700;
-
-    --leading-tight:  1.15;
-    --leading-snug:   1.3;
-    --leading-normal: 1.5;
-    --leading-relaxed:1.65;
-
-    --tracking-tight:  -0.02em;
-    --tracking-wide:    0.05em;
-    --tracking-widest:  0.1em;
-
-    --space-1: 0.25rem;  --space-2: 0.5rem;  --space-3: 0.75rem;
-    --space-4: 1rem;     --space-5: 1.25rem; --space-6: 1.5rem;
-    --space-8: 2rem;     --space-10: 2.5rem; --space-12: 3rem;
-    --space-16: 4rem;    --space-20: 5rem;   --space-24: 6rem;
-
-    --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px;
-    --radius-xl: 16px; --radius-pill: 999px;
-
-    --shadow-sm: 0 1px 3px rgba(11,42,74,0.08);
-    --shadow-md: 0 4px 16px rgba(11,42,74,0.10);
-    --shadow-lg: 0 12px 40px rgba(11,42,74,0.14);
-
-    --max-width: 1200px;
-    --max-width-text: 680px;
-
-    --transition-fast: 120ms ease;
-    --transition-normal: 220ms ease;
-    --transition-slow: 380ms ease;
+    --ink:    #11202F;
+    --muted:  #586674;
+    --line:   #E4EAF1;
+    --tint:   #F2F7FE;
+    --bg:     #FFFFFF;
+    --good-bg: #E7F6EC; --good-fg: #176A3A;
+    --err-bg:  #FCEFE9; --err-fg:  #B0431F;
   }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.55;}
+  ::selection{background:var(--blue-bright);color:#fff;}
+  a{color:var(--blue);}
+  :focus-visible{outline:3px solid var(--blue-bright);outline-offset:3px;border-radius:4px;}
+  .display{font-family:'Space Grotesk',system-ui,sans-serif;letter-spacing:-.02em;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px;}
+  img,svg{max-width:100%;}
 
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; scroll-behavior: smooth; }
+  /* topbar */
+  .topbar{border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:20;}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:62px;}
+  .logo{display:flex;align-items:center;gap:10px;font-family:'Space Grotesk';font-weight:700;font-size:17px;color:var(--navy);letter-spacing:-.01em;}
+  .logo .mark{width:26px;height:26px;border-radius:7px;background:var(--navy);position:relative;flex:none;}
+  .logo .mark::after{content:"";position:absolute;inset:7px 7px auto auto;width:8px;height:8px;border-radius:2px;background:var(--blue-bright);}
+  .nav{display:flex;gap:26px;font-size:13.5px;color:var(--muted);font-weight:500;}
+  .nav a{color:var(--muted);text-decoration:none;}
+  .nav a:hover{color:var(--navy);}
+  @media (max-width:720px){.nav{display:none;}}
+  .btn{font-family:'Space Grotesk';font-weight:600;font-size:14.5px;border-radius:11px;padding:11px 20px;border:1.5px solid transparent;cursor:pointer;text-decoration:none;display:inline-block;transition:transform .15s ease, background .15s ease;}
+  .btn-primary{background:var(--navy);color:#fff;}
+  .btn-primary:hover{background:#0d3358;transform:translateY(-1px);}
+  .btn-ghost{background:#fff;color:var(--navy);border-color:#cdd7e3;}
+  .btn-ghost:hover{border-color:var(--navy);transform:translateY(-1px);}
+  .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;}
 
-  @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-  }
+  /* hero */
+  .hero{padding:74px 0 60px;}
+  .hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center;}
+  @media (max-width:860px){.hero .wrap{grid-template-columns:1fr;gap:36px;} .hero{padding:44px 0;}}
+  .eyebrow{font-family:'Space Grotesk';font-weight:600;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue);display:flex;align-items:center;gap:9px;margin-bottom:20px;}
+  .eyebrow::before{content:"";width:24px;height:2px;background:var(--coral);border-radius:2px;}
+  h1{font-family:'Space Grotesk';font-weight:700;font-size:clamp(32px,4.4vw,50px);line-height:1.06;color:var(--navy);margin:0 0 20px;}
+  h1 .pop{color:var(--blue);}
+  .lede{font-size:18px;color:var(--muted);max-width:38ch;margin:0 0 30px;}
+  .btns{display:flex;gap:13px;flex-wrap:wrap;align-items:center;}
+  .trust{margin-top:24px;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:9px;}
+  .trust .dot{width:7px;height:7px;border-radius:50%;background:var(--coral);flex:none;}
 
-  body {
-    font-family: var(--font-body);
-    font-size: var(--text-base);
-    line-height: var(--leading-relaxed);
-    color: var(--ink);
-    background: var(--bg);
-  }
+  .visual{position:relative;}
+  .call-card{background:var(--tint);border:1px solid var(--line);border-radius:22px;padding:26px;}
+  .call-card .row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;}
+  .call-card .row + .row{border-top:1px solid var(--line);}
+  .call-card .ic{width:32px;height:32px;border-radius:9px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none;font-family:'Space Grotesk';}
+  .call-card .t{font-family:'Space Grotesk';font-weight:600;font-size:13.5px;color:var(--navy);}
+  .call-card .s{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .module{position:absolute;right:-10px;bottom:-16px;background:#fff;border:1px solid var(--line);border-radius:15px;padding:13px 15px;box-shadow:0 14px 34px rgba(11,42,74,.13);display:flex;align-items:center;gap:12px;}
+  .module .ic{width:34px;height:34px;border-radius:9px;background:var(--blue-bright);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk';font-weight:700;flex:none;}
+  .module .t{font-family:'Space Grotesk';font-weight:600;font-size:13px;color:var(--navy);line-height:1.2;}
+  .module .s{font-size:11.5px;color:var(--muted);}
+  @media (max-width:860px){.module{right:0;}}
 
-  img, svg { display: block; max-width: 100%; }
-  a { color: var(--blue); }
-  h1, h2, h3, h4 {
-    font-family: var(--font-display);
-    font-weight: var(--weight-bold);
-    line-height: var(--leading-tight);
-    letter-spacing: var(--tracking-tight);
-    color: var(--navy);
-  }
+  /* dark band */
+  .band{background:var(--navy);color:#fff;margin-top:8px;}
+  .band .wrap{padding:44px 28px;display:grid;grid-template-columns:1fr auto;gap:26px;align-items:center;}
+  @media (max-width:760px){.band .wrap{grid-template-columns:1fr;}}
+  .band h2{font-family:'Space Grotesk';font-weight:600;font-size:clamp(21px,2.8vw,28px);margin:0;line-height:1.15;}
+  .band h2 .pop{color:var(--blue-bright);}
+  .chips{display:flex;gap:10px;flex-wrap:wrap;}
+  .chip{border:1px solid rgba(255,255,255,.22);border-radius:99px;padding:9px 15px;font-family:'Space Grotesk';font-weight:500;font-size:13px;display:flex;align-items:center;gap:8px;}
+  .chip .d{width:7px;height:7px;border-radius:50%;flex:none;}
 
-  :focus-visible { outline: 2px solid var(--blue-bright); outline-offset: 3px; border-radius: var(--radius-sm); }
+  /* services (live) */
+  .services{padding:70px 0 20px;}
+  .section-label{font-family:'Space Grotesk';font-weight:600;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .services h2, .roadmap h2, .signup h2{font-family:'Space Grotesk';font-weight:700;font-size:26px;color:var(--navy);margin:0 0 30px;letter-spacing:-.02em;}
+  .svcgrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  @media (max-width:760px){.svcgrid{grid-template-columns:1fr;}}
+  .svc{border:1px solid var(--line);border-radius:16px;padding:26px;}
+  .svc .tag{display:inline-block;font-family:'Space Grotesk';font-weight:600;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:4px 9px;border-radius:6px;background:var(--good-bg);color:var(--good-fg);margin-bottom:14px;}
+  .svc h3{font-family:'Space Grotesk';font-weight:600;font-size:19px;color:var(--navy);margin:0 0 8px;}
+  .svc p{font-size:14.5px;color:var(--muted);margin:0 0 14px;}
+  .svc ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--ink);}
+  .svc li{margin-bottom:5px;}
 
-  .container { width: 100%; max-width: var(--max-width); margin: 0 auto; padding: 0 var(--space-6); }
-  @media (max-width: 768px) { .container { padding: 0 var(--space-4); } }
+  /* roadmap / coming soon */
+  .roadmap{padding:56px 0;}
+  .roadgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:34px;}
+  @media (max-width:760px){.roadgrid{grid-template-columns:1fr;}}
+  .road{border:1px dashed var(--line);border-radius:14px;padding:18px 20px;background:var(--tint);}
+  .road .tag{display:inline-block;font-family:'Space Grotesk';font-weight:600;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:#fff;color:var(--muted);border:1px solid var(--line);margin-bottom:10px;}
+  .road h4{font-family:'Space Grotesk';font-weight:600;font-size:15px;color:var(--navy);margin:0 0 5px;}
+  .road p{font-size:13px;color:var(--muted);margin:0;}
 
-  .eyebrow {
-    font-family: var(--font-display);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-widest);
-    text-transform: uppercase;
-    color: var(--blue);
-  }
+  .checklist{border:1px solid var(--line);border-radius:18px;padding:30px;display:grid;grid-template-columns:1.1fr .9fr;gap:26px;align-items:center;}
+  @media (max-width:760px){.checklist{grid-template-columns:1fr;}}
+  .checklist h3{font-family:'Space Grotesk';font-weight:600;font-size:19px;color:var(--navy);margin:0 0 8px;}
+  .checklist p{font-size:14px;color:var(--muted);margin:0;}
 
-  .lead { font-size: var(--text-lg); color: var(--muted); max-width: var(--max-width-text); }
+  /* forms */
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-family:'Space Grotesk';font-weight:600;font-size:12.5px;color:var(--navy);margin-bottom:6px;}
+  .field input{width:100%;font-family:'Inter';font-size:14.5px;padding:11px 13px;border:1.5px solid #cdd7e3;border-radius:10px;color:var(--ink);background:#fff;}
+  .field input:focus{border-color:var(--blue-bright);}
+  form .btn{width:100%;text-align:center;}
+  .formnote{font-size:12px;color:var(--muted);margin-top:10px;}
+  .formmsg{font-family:'Space Grotesk';font-weight:600;font-size:13px;padding:11px 13px;border-radius:10px;margin-top:12px;display:none;}
+  .formmsg.show{display:block;}
+  .formmsg.ok{background:var(--good-bg);color:var(--good-fg);}
+  .formmsg.err{background:var(--err-bg);color:var(--err-fg);}
 
-  /* ============================================================
-     BUTTONS
-     ============================================================ */
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-    font-family: var(--font-display); font-size: var(--text-base); font-weight: var(--weight-semibold);
-    border: 2px solid transparent; border-radius: var(--radius-md);
-    padding: var(--space-3) var(--space-6); cursor: pointer; text-decoration: none;
-    transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
-    white-space: nowrap;
-  }
-  .btn:active { transform: translateY(1px); }
-  .btn--primary { background: var(--navy); color: #fff; border-color: var(--navy); }
-  .btn--primary:hover { background: var(--blue); border-color: var(--blue); box-shadow: var(--shadow-md); }
-  .btn--primary-bright { background: var(--blue-bright); color: #fff; border-color: var(--blue-bright); }
-  .btn--primary-bright:hover { background: #fff; color: var(--navy); border-color: #fff; box-shadow: var(--shadow-md); }
-  .btn--lg { font-size: var(--text-lg); padding: var(--space-4) var(--space-8); border-radius: var(--radius-lg); }
-  .btn--sm { font-size: var(--text-sm); padding: var(--space-2) var(--space-4); }
-  .btn--ghost { background: transparent; color: var(--blue); border-color: transparent; padding: var(--space-4) var(--space-2); text-decoration: underline; }
-  .btn--ghost:hover { color: var(--navy); }
+  /* signup */
+  .signup{padding:20px 0 70px;}
+  .signupwrap{border:1px solid var(--line);border-radius:18px;padding:34px;display:grid;grid-template-columns:1fr 1fr;gap:36px;}
+  @media (max-width:760px){.signupwrap{grid-template-columns:1fr;padding:24px;}}
+  .signupwrap .pitch h3{font-family:'Space Grotesk';font-weight:600;font-size:20px;color:var(--navy);margin:0 0 10px;}
+  .signupwrap .pitch p{font-size:14.5px;color:var(--muted);margin:0 0 16px;}
+  .signupwrap .pitch ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--ink);}
+  .signupwrap .pitch li{margin-bottom:7px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:480px){.row2{grid-template-columns:1fr;}}
 
-  /* ============================================================
-     NAV — deliberately minimal.
-     No links to pages that don't exist yet (Services / Pricing /
-     Log In). One page, one job: capture the email. Flagged
-     deviation from the design-system reference nav — see build
-     notes in chat.
-     ============================================================ */
-  .nav {
-    position: sticky; top: 0; z-index: 100;
-    background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--line);
-    padding: var(--space-4) 0;
-  }
-  .nav .container { display: flex; align-items: center; justify-content: space-between; }
-  .nav__logo {
-    font-family: var(--font-display); font-size: var(--text-xl); font-weight: var(--weight-bold);
-    color: var(--navy); text-decoration: none; letter-spacing: var(--tracking-tight);
-  }
+  /* footer */
+  footer{border-top:1px solid var(--line);padding:34px 0;}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:18px 26px;align-items:center;justify-content:space-between;}
+  footer .flinks{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;}
+  footer .flinks a{color:var(--muted);text-decoration:none;}
+  footer .flinks a:hover{color:var(--navy);}
+  footer .fmeta{font-size:12.5px;color:var(--muted);}
 
-  /* ============================================================
-     HERO
-     ============================================================ */
-  .hero { padding: var(--space-20) 0 var(--space-16); }
-  .hero .container { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: var(--space-16); align-items: center; }
-  @media (max-width: 960px) { .hero .container { grid-template-columns: 1fr; gap: var(--space-12); } }
-
-  .hero h1 { font-size: var(--text-6xl); margin: var(--space-4) 0 var(--space-5); }
-  @media (max-width: 768px) { .hero h1 { font-size: var(--text-4xl); } .hero { padding: var(--space-12) 0 var(--space-10); } }
-
-  .hero__cta-row { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-8); }
-  .hero__meta { margin-top: var(--space-4); font-size: var(--text-sm); color: var(--muted); }
-
-  /* ============================================================
-     SIGNATURE ELEMENT — the missed-call ledger
-     Two timestamped rows, animated in a slow loop. Left = the job
-     you lose today. Right = the same call with H3 answering.
-     This is the one visual risk on the page; everything else stays
-     quiet around it.
-     ============================================================ */
-  .ledger {
-    background: var(--navy);
-    border-radius: var(--radius-xl);
-    padding: var(--space-8) var(--space-6);
-    color: #fff;
-    box-shadow: var(--shadow-lg);
-  }
-  .ledger__head {
-    display: flex; justify-content: space-between; align-items: baseline;
-    margin-bottom: var(--space-6);
-  }
-  .ledger__head .eyebrow { color: var(--blue-bright); }
-  .ledger__live {
-    display: inline-flex; align-items: center; gap: var(--space-2);
-    font-family: var(--font-display); font-size: var(--text-xs); color: rgba(255,255,255,0.55);
-    letter-spacing: var(--tracking-wide); text-transform: uppercase;
-  }
-  .ledger__live-dot {
-    width: 7px; height: 7px; border-radius: 50%; background: var(--coral);
-    animation: pulse 1.8s ease-in-out infinite;
-  }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-
-  .ledger__cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
-  @media (max-width: 480px) { .ledger__cols { grid-template-columns: 1fr; } }
-
-  .ledger__col-label {
-    font-family: var(--font-display); font-size: var(--text-xs); font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-wide); text-transform: uppercase; margin-bottom: var(--space-3);
-  }
-  .ledger__col--lost .ledger__col-label { color: rgba(255,107,94,0.85); }
-  .ledger__col--won .ledger__col-label { color: var(--blue-bright); }
-
-  .ledger__rows { display: flex; flex-direction: column; gap: var(--space-2); min-height: 176px; }
-  .ledger__row {
-    display: flex; align-items: baseline; gap: var(--space-3);
-    font-family: var(--font-body); font-size: var(--text-sm);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-sm);
-    background: rgba(255,255,255,0.04);
-    opacity: 0; transform: translateY(4px);
-    animation: rowIn 420ms ease forwards;
-  }
-  .ledger__row time { font-family: var(--font-display); font-size: var(--text-xs); color: rgba(255,255,255,0.45); min-width: 62px; }
-  .ledger__col--lost .ledger__row.is-final { background: rgba(255,107,94,0.12); }
-  .ledger__col--won .ledger__row.is-final { background: rgba(46,123,255,0.14); }
-  @keyframes rowIn { to { opacity: 1; transform: translateY(0); } }
-
-  .ledger__foot {
-    margin-top: var(--space-6); padding-top: var(--space-5);
-    border-top: 1px solid rgba(255,255,255,0.12);
-    font-size: var(--text-sm); color: rgba(255,255,255,0.6);
-  }
-  .ledger__foot strong { color: #fff; }
-
-  /* ============================================================
-     SECTIONS — general
-     ============================================================ */
-  .section { padding: var(--space-20) 0; }
-  @media (max-width: 768px) { .section { padding: var(--space-12) 0; } }
-  .section--tint { background: var(--tint); }
-  .section-head { max-width: 640px; margin-bottom: var(--space-10); }
-  .section-head .eyebrow { margin-bottom: var(--space-3); display: block; }
-  .section-head h2 { font-size: var(--text-4xl); margin-bottom: var(--space-4); }
-  @media (max-width: 768px) { .section-head h2 { font-size: var(--text-3xl); } }
-
-  /* ============================================================
-     PROBLEM STRIP
-     ============================================================ */
-  .problem-strip {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-8);
-  }
-  @media (max-width: 860px) { .problem-strip { grid-template-columns: 1fr; } }
-  .problem-strip__item { border-top: 3px solid var(--navy); padding-top: var(--space-4); }
-  .problem-strip__stat {
-    font-family: var(--font-display); font-size: var(--text-4xl); font-weight: var(--weight-bold);
-    color: var(--navy); line-height: 1; margin-bottom: var(--space-2); letter-spacing: var(--tracking-tight);
-  }
-  .problem-strip__label { color: var(--muted); font-size: var(--text-sm); }
-
-  /* ============================================================
-     PROCESS — the five-step flow.
-     A connected line, not a grid of disconnected cards: the
-     order is the content.
-     ============================================================ */
-  .flow { position: relative; }
-  .flow__line {
-    position: absolute; top: 26px; left: 0; right: 0; height: 2px;
-    background: var(--line); z-index: 0;
-  }
-  @media (max-width: 860px) { .flow__line { display: none; } }
-  .flow__steps { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-6); }
-  @media (max-width: 860px) { .flow__steps { grid-template-columns: 1fr; gap: var(--space-5); } }
-
-  .flow__step { display: flex; flex-direction: column; }
-  .flow__num {
-    width: 52px; height: 52px; border-radius: 50%;
-    background: var(--bg); border: 2px solid var(--navy);
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--font-display); font-weight: var(--weight-bold); color: var(--navy);
-    margin-bottom: var(--space-4);
-  }
-  @media (max-width: 860px) { .flow__step { flex-direction: row; align-items: flex-start; gap: var(--space-4); } .flow__num { margin-bottom: 0; flex-shrink: 0; } }
-  .flow__title { font-family: var(--font-display); font-weight: var(--weight-bold); font-size: var(--text-lg); color: var(--navy); margin-bottom: var(--space-2); }
-  .flow__desc { font-size: var(--text-sm); color: var(--muted); }
-
-  /* ============================================================
-     CREDIBILITY BAND (navy) — founder-led, pre-revenue-honest
-     ============================================================ */
-  .section--navy { background: var(--navy); color: #fff; }
-  .section--navy h2 { color: #fff; }
-  .section--navy .eyebrow { color: var(--blue-bright); }
-  .cred { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-16); align-items: start; }
-  @media (max-width: 860px) { .cred { grid-template-columns: 1fr; gap: var(--space-8); } }
-  .cred p { color: rgba(255,255,255,0.75); margin-bottom: var(--space-4); font-size: var(--text-lg); line-height: var(--leading-relaxed); }
-  .cred p:last-child { margin-bottom: 0; }
-  .cred-list { display: flex; flex-direction: column; gap: var(--space-5); }
-  .cred-list__item { padding-left: var(--space-5); border-left: 2px solid var(--blue-bright); }
-  .cred-list__title { font-family: var(--font-display); font-weight: var(--weight-semibold); color: #fff; margin-bottom: var(--space-1); }
-  .cred-list__desc { color: rgba(255,255,255,0.6); font-size: var(--text-sm); }
-
-  /* ============================================================
-     LEAD MAGNET + EMAIL CAPTURE
-     ============================================================ */
-  .capture { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-16); align-items: center; }
-  @media (max-width: 860px) { .capture { grid-template-columns: 1fr; gap: var(--space-10); } }
-
-  .checklist-card {
-    background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-xl);
-    padding: var(--space-8); box-shadow: var(--shadow-md);
-  }
-  .checklist-card__badge {
-    display: inline-flex; align-items: center; font-family: var(--font-display); font-size: var(--text-xs);
-    font-weight: var(--weight-semibold); letter-spacing: 0.02em; border-radius: var(--radius-pill);
-    padding: var(--space-1) var(--space-3); background: rgba(21,84,200,0.10); color: var(--blue);
-    margin-bottom: var(--space-4);
-  }
-  .checklist-card ul { list-style: none; display: flex; flex-direction: column; gap: var(--space-3); margin: var(--space-5) 0 0; }
-  .checklist-card li { display: flex; gap: var(--space-3); font-size: var(--text-sm); color: var(--muted); }
-  .checklist-card li::before { content: '✓'; color: var(--blue); font-weight: var(--weight-bold); flex-shrink: 0; }
-
-  .capture-form {
-    background: var(--tint); border-radius: var(--radius-xl); padding: var(--space-8);
-  }
-  .capture-form h3 { font-size: var(--text-2xl); margin-bottom: var(--space-3); }
-  .capture-form p { color: var(--muted); font-size: var(--text-sm); margin-bottom: var(--space-6); }
-
-  .form-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-  .form-row input[type="email"] {
-    flex: 1; min-width: 200px;
-    font-family: var(--font-body); font-size: var(--text-base); color: var(--ink);
-    background: var(--bg); border: 1.5px solid var(--line); border-radius: var(--radius-md);
-    padding: var(--space-3) var(--space-4); outline: none;
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-  }
-  .form-row input[type="email"]:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(21,84,200,0.12); }
-  .form-note { font-size: var(--text-xs); color: var(--muted); margin-top: var(--space-3); }
-  .form-status { font-size: var(--text-sm); margin-top: var(--space-3); display: none; }
-  .form-status.is-success { display: block; color: var(--blue); }
-  .form-status.is-error { display: block; color: #C94F44; }
-
-  /* ============================================================
-     FOOTER — trimmed. Real contact only, no dead-end links.
-     ============================================================ */
-  footer { background: var(--navy); padding: var(--space-12) 0; margin-top: var(--space-4); }
-  .footer__row { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--space-8); }
-  .footer__brand { font-family: var(--font-display); font-size: var(--text-lg); font-weight: var(--weight-bold); color: #fff; margin-bottom: var(--space-2); }
-  .footer__desc { color: rgba(255,255,255,0.55); font-size: var(--text-sm); max-width: 320px; }
-  .footer__services { list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
-  .footer__services li { color: rgba(255,255,255,0.5); font-size: var(--text-sm); }
-  .footer__services-label { font-family: var(--font-display); font-size: var(--text-xs); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: rgba(255,255,255,0.4); margin-bottom: var(--space-3); }
-  .footer__bottom { margin-top: var(--space-10); padding-top: var(--space-6); border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); font-size: var(--text-xs); color: rgba(255,255,255,0.4); }
-  .footer__bottom a { color: rgba(255,255,255,0.55); text-decoration: none; }
-  .footer__bottom a:hover { color: #fff; }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 </style>
 </head>
 <body>
 
-<nav class="nav">
-  <div class="container">
-    <a href="/" class="nav__logo">H3 Operations</a>
-    <a href="#early-access" class="btn btn--primary btn--sm" data-cta="nav">Join early access</a>
-  </div>
-</nav>
-
-<!-- ============================================================
-     HERO
-     ============================================================ -->
-<header class="hero">
-  <div class="container">
-    <div>
-      <span class="eyebrow">The front office for service businesses</span>
-      <h1>Stop losing jobs to a missed call.</h1>
-      <p class="lead">H3 Operations gets you found, answers every call, captures every lead, quotes fast, and books the job — one platform, so a ringing phone never turns into a lost customer again.</p>
-
-      <div class="hero__cta-row">
-        <a href="#early-access" class="btn btn--primary btn--lg" data-cta="hero-primary">Join early access</a>
-        <a href="#checklist" class="btn btn--ghost" data-cta="hero-secondary">Get the free checklist →</a>
-      </div>
-      <p class="hero__meta">Built by a founder with 25 years of consulting businesses on operations, technology, and growth. No contracts. Early access is free.</p>
-    </div>
-
-    <!-- Signature element: the missed-call ledger -->
-    <div class="ledger" aria-label="Comparison: a call handled without H3 versus with H3">
-      <div class="ledger__head">
-        <span class="eyebrow">A Tuesday, 8:14 AM</span>
-        <span class="ledger__live"><span class="ledger__live-dot" aria-hidden="true"></span>Same call, two outcomes</span>
-      </div>
-      <div class="ledger__cols">
-        <div class="ledger__col ledger__col--lost">
-          <div class="ledger__col-label">Without H3</div>
-          <div class="ledger__rows" id="ledger-lost"></div>
-        </div>
-        <div class="ledger__col ledger__col--won">
-          <div class="ledger__col-label">With H3</div>
-          <div class="ledger__rows" id="ledger-won"></div>
-        </div>
-      </div>
-      <div class="ledger__foot">One missed call is one lost job. <strong>H3 answers in seconds, every time.</strong></div>
+  <div class="topbar">
+    <div class="wrap">
+      <div class="logo"><span class="mark"></span>H3 Operations</div>
+      <nav class="nav">
+        <a href="#services">Live services</a>
+        <a href="#roadmap">Coming soon</a>
+        <a href="#signup">Get started</a>
+      </nav>
+      <a class="btn btn-primary" href="#signup" style="padding:9px 18px;font-size:13.5px;">Get started</a>
     </div>
   </div>
-</header>
 
-<!-- ============================================================
-     PROBLEM
-     ============================================================ -->
-<section class="section">
-  <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">The real cost</span>
-      <h2>You're not losing jobs to competitors. You're losing them to voicemail.</h2>
-      <p class="lead">You're on a roof, under a truck, or mid-install when the phone rings. It goes to voicemail. They call the next name on the list. Multiply that by every missed call, every week, all year.</p>
-    </div>
-    <div class="problem-strip">
-      <div class="problem-strip__item">
-        <div class="problem-strip__stat">Most</div>
-        <div class="problem-strip__label">callers who hit voicemail don't leave a message — they hang up and call the next name on the list.</div>
-      </div>
-      <div class="problem-strip__item">
-        <div class="problem-strip__stat">24/7</div>
-        <div class="problem-strip__label">is when your customers' emergencies happen — not just 8-to-5, Monday through Friday.</div>
-      </div>
-      <div class="problem-strip__item">
-        <div class="problem-strip__stat">1 login</div>
-        <div class="problem-strip__label">replaces the 8–12 disconnected tools most service businesses juggle just to book a job.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     FIVE-STEP FLOW
-     ============================================================ -->
-<section class="section section--tint">
-  <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">How H3 works</span>
-      <h2>From invisible to unstoppable, in five steps.</h2>
-      <p class="lead">This isn't five separate tools. It's one sequence, in order, so nothing falls through the cracks between a search result and a booked job.</p>
-    </div>
-    <div class="flow">
-      <div class="flow__line" aria-hidden="true"></div>
-      <div class="flow__steps">
-        <div class="flow__step">
-          <div class="flow__num">1</div>
-          <div class="flow__title">Get found</div>
-          <div class="flow__desc">SEO, GEO, and AI-search optimization so customers find you before your competitors.</div>
-        </div>
-        <div class="flow__step">
-          <div class="flow__num">2</div>
-          <div class="flow__title">Capture the lead</div>
-          <div class="flow__desc">Smart forms and CRM that turn every visitor into a real, tracked prospect.</div>
-        </div>
-        <div class="flow__step">
-          <div class="flow__num">3</div>
-          <div class="flow__title">Answer every call</div>
-          <div class="flow__desc">An AI receptionist answers 24/7, qualifies the caller, and captures their info.</div>
-        </div>
-        <div class="flow__step">
-          <div class="flow__num">4</div>
-          <div class="flow__title">Quote fast</div>
-          <div class="flow__desc">Professional quotes out in minutes, not days, while the lead is still hot.</div>
-        </div>
-        <div class="flow__step">
-          <div class="flow__num">5</div>
-          <div class="flow__title">Book the job</div>
-          <div class="flow__desc">Scheduling and dispatch that fills your calendar and keeps your crew on track.</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     CREDIBILITY — founder-led, honest about pre-revenue stage
-     ============================================================ -->
-<section class="section section--navy">
-  <div class="container cred">
-    <div>
-      <span class="eyebrow">Why trust something this new</span>
-      <h2 style="margin-bottom: var(--space-5);">Built by someone who's spent a career fixing how businesses run.</h2>
-      <p>H3 Operations is built by a founder who's spent 25 years consulting businesses and leading major technology and operations implementations to drive growth and the ability to scale. He has seen what causes businesses to succeed and fail. Not taking care of the customer is the leading cause of failure. H3 Operations is created to take care of your customer.</p>
-      <p>We're early. That's on purpose: early access means direct input into what gets built next, and a seat at the table as a design partner, not just another login.</p>
-    </div>
-    <div class="cred-list">
-      <div class="cred-list__item">
-        <div class="cred-list__title">For franchisors</div>
-        <div class="cred-list__desc">One backbone your whole network can run on, with consistent lead capture and reporting at every location.</div>
-      </div>
-      <div class="cred-list__item">
-        <div class="cred-list__title">For new franchisees &amp; founders</div>
-        <div class="cred-list__desc">The systems of an established operator, without the franchise fees or the years of trial and error.</div>
-      </div>
-      <div class="cred-list__item">
-        <div class="cred-list__title">For design partners</div>
-        <div class="cred-list__desc">First 3–5 early-access businesses shape the product roadmap directly with the founder.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     LEAD MAGNET + EMAIL CAPTURE
-     ============================================================ -->
-<section class="section" id="checklist">
-  <div class="container capture">
-    <div class="checklist-card">
-      <span class="checklist-card__badge">Free download</span>
-      <h3>The Service Business Job-Capture Checklist</h3>
-      <p style="color:var(--muted); font-size:var(--text-sm);">The exact checklist to audit where you're losing jobs today — before you change a single tool.</p>
-      <ul>
-        <li>Where missed calls are actually going right now</li>
-        <li>The 5 spots leads quietly fall through the cracks</li>
-        <li>A same-day fix you can make with no new software</li>
-        <li>What "good" looks like for quote turnaround time</li>
-      </ul>
-    </div>
-
-    <div class="capture-form" id="early-access">
-      <h3>Join early access</h3>
-      <p>Get the checklist instantly, plus first access when H3 opens up. No spam, unsubscribe anytime.</p>
-
-      <!-- ============================================================
-           EMAIL CAPTURE — build vs. buy: BUY.
-           Posts to Kit's free-tier "H3 Early Access" form (ID 9642119).
-           Submission is handled via fetch() below (see script block) so
-           visitors stay on-page instead of redirecting to Kit's hosted
-           confirmation page. Kit still sends its own confirmation email
-           per its default double opt-in settings.
-           ============================================================ -->
-      <form
-        id="early-access-form"
-        action="https://app.kit.com/forms/9642119/subscriptions"
-        method="post"
-        data-sv="9"
-      >
-        <div class="form-row">
-          <label for="email-input" class="visually-hidden" style="position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0);">Email address</label>
-          <input type="email" id="email-input" name="email_address" placeholder="you@yourcompany.com" required aria-label="Email address" />
-          <button type="submit" class="btn btn--primary">Send me the checklist →</button>
-        </div>
-        <p class="form-note">By joining, you'll also get occasional build-in-public updates from the founder. No spam, ever.</p>
-        <p class="form-status" id="form-status" role="status"></p>
-      </form>
-    </div>
-  </div>
-</section>
-
-<!-- ============================================================
-     FOOTER — trimmed to real, live things only
-     ============================================================ -->
-<footer>
-  <div class="container">
-    <div class="footer__row">
+  <!-- hero -->
+  <section class="hero">
+    <div class="wrap">
       <div>
-        <div class="footer__brand">H3 Operations</div>
-        <p class="footer__desc">The front office for service businesses. Get found, capture leads, answer every call, quote fast, book the job.</p>
+        <div class="eyebrow">For home &amp; field service businesses</div>
+        <h1>Never miss a call. <span class="pop">Never lose a lead.</span></h1>
+        <p class="lede">H3 answers every call with a real conversation, and turns every one of them into a lead you can actually see — so nothing falls through the cracks while you're on a job.</p>
+        <div class="btns">
+          <a class="btn btn-primary" href="#signup">Get started</a>
+          <a class="btn btn-ghost" href="#services">See how it works</a>
+        </div>
+        <div class="trust"><span class="dot"></span> Built by someone who's spent 25 years fixing how businesses run.</div>
       </div>
-      <div>
-        <div class="footer__services-label">What's coming</div>
-        <ul class="footer__services">
-          <li>Get Found (SEO/GEO/AEO)</li>
-          <li>Capture the Lead</li>
-          <li>Phone Answering</li>
-          <li>Estimating &amp; Quotes</li>
-          <li>Scheduling &amp; Dispatch</li>
-        </ul>
+
+      <div class="visual">
+        <div class="call-card">
+          <div class="row">
+            <div class="ic">☎</div>
+            <div>
+              <div class="t">Incoming call, 6:42 PM</div>
+              <div class="s">Answered — no voicemail, no missed call.</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="ic" style="background:var(--blue-bright)">✓</div>
+            <div>
+              <div class="t">Lead captured automatically</div>
+              <div class="s">Name, number, and job details logged.</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="ic" style="background:var(--coral)">➜</div>
+            <div>
+              <div class="t">Ready in your dashboard</div>
+              <div class="s">Follow up when it's convenient for you.</div>
+            </div>
+          </div>
+        </div>
+        <div class="module">
+          <div class="ic">24/7</div>
+          <div>
+            <div class="t">Always answered</div>
+            <div class="s">even after hours</div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="footer__bottom">
-      <p>© 2026 H3 Operations. All rights reserved.</p>
-      <a href="mailto:michael@h3operations.com">michael@h3operations.com</a>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <h2>Stop losing jobs to <span class="pop">a phone that goes to voicemail.</span></h2>
+      <div class="chips">
+        <span class="chip"><span class="d" style="background:var(--blue-bright)"></span>Answers every call</span>
+        <span class="chip"><span class="d" style="background:#fff"></span>Captures every lead</span>
+        <span class="chip"><span class="d" style="background:var(--coral)"></span>One place to see it all</span>
+      </div>
     </div>
-  </div>
-</footer>
+  </section>
+
+  <!-- live services -->
+  <section class="services" id="services">
+    <div class="wrap">
+      <div class="section-label">Live today</div>
+      <h2>Two things, done well.</h2>
+      <div class="svcgrid">
+        <div class="svc">
+          <span class="tag">Live</span>
+          <h3>Answer Every Call</h3>
+          <p>A real conversation answers your line, day or night — so a ringing phone never costs you a job again.</p>
+          <ul>
+            <li>Picks up when you can't — nights, weekends, mid-job</li>
+            <li>Talks like a person, not a phone tree</li>
+            <li>Handles the basics so you only get called back for what matters</li>
+          </ul>
+        </div>
+        <div class="svc">
+          <span class="tag">Live</span>
+          <h3>Capture the Lead</h3>
+          <p>Every call becomes a record you can actually see — name, number, and what they needed, waiting for you.</p>
+          <ul>
+            <li>Every caller logged automatically, no manual entry</li>
+            <li>One dashboard for every location and every call</li>
+            <li>Nothing lives only in a voicemail inbox again</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- roadmap + checklist lead magnet -->
+  <section class="roadmap" id="roadmap">
+    <div class="wrap">
+      <div class="section-label">Coming soon</div>
+      <h2>Built to grow into the whole operation.</h2>
+
+      <!-- HACK: roadmap chips are static HTML for v1, not registry-driven. The feature
+           registry (Standards §5) exists to gate app nav/routes; this marketing page
+           isn't gated by it. Exit condition: when the marketing site moves to web/,
+           drive these from the registry instead of hardcoding. -->
+      <div class="roadgrid">
+        <div class="road">
+          <span class="tag">Coming soon</span>
+          <h4>Get Found</h4>
+          <p>Local search and listings, kept up to date automatically.</p>
+        </div>
+        <div class="road">
+          <span class="tag">Coming soon</span>
+          <h4>Quote Fast</h4>
+          <p>Turn a lead into a quote without opening a spreadsheet.</p>
+        </div>
+        <div class="road">
+          <span class="tag">Coming soon</span>
+          <h4>Book the Job</h4>
+          <p>Scheduling that fills your calendar without the back-and-forth.</p>
+        </div>
+      </div>
+
+      <div class="checklist">
+        <div>
+          <h3>Get the pre-launch checklist</h3>
+          <p>A short, practical checklist for getting a home-service business ready to stop losing calls and leads — sent to your inbox.</p>
+        </div>
+        <div>
+          <form id="checklistForm" novalidate>
+            <div class="field">
+              <label for="cl-email">Email address</label>
+              <input type="email" id="cl-email" name="email" required autocomplete="email" placeholder="you@example.com" />
+            </div>
+            <button class="btn btn-primary" type="submit">Send me the checklist</button>
+            <div class="formnote">We'll email it over shortly — this isn't an instant download.</div>
+            <div class="formmsg" id="cl-msg" role="status"></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- signup -->
+  <section class="signup" id="signup">
+    <div class="wrap">
+      <div class="section-label">Get started</div>
+      <h2>Request setup for your business.</h2>
+      <div class="signupwrap">
+        <div class="pitch">
+          <h3>Concierge onboarding, done with you</h3>
+          <p>We set up Answer Every Call and Capture the Lead for your business directly — no self-serve account to configure, no software to learn on your own.</p>
+          <ul>
+            <li>We reach out to confirm details and get your line connected</li>
+            <li>Typically live within days, not weeks</li>
+            <li>You keep your existing number — calls route through, nothing to switch</li>
+          </ul>
+        </div>
+        <div>
+          <form id="signupForm" novalidate>
+            <div class="row2">
+              <div class="field">
+                <label for="su-business">Business name</label>
+                <input type="text" id="su-business" name="businessName" required autocomplete="organization" />
+              </div>
+              <div class="field">
+                <label for="su-contact">Your name</label>
+                <input type="text" id="su-contact" name="contactName" required autocomplete="name" />
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="su-phone">Phone number</label>
+                <input type="tel" id="su-phone" name="phone" required autocomplete="tel" placeholder="(555) 555-5555" />
+              </div>
+              <div class="field">
+                <label for="su-email">Email address</label>
+                <input type="email" id="su-email" name="email" required autocomplete="email" />
+              </div>
+            </div>
+            <button class="btn btn-primary" type="submit">Request setup</button>
+            <div class="formnote">We'll follow up personally — no charge, no commitment, to get you set up.</div>
+            <div class="formmsg" id="su-msg" role="status"></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="logo"><span class="mark"></span>H3 Operations</div>
+      <div class="flinks">
+        <a href="/privacy/">Privacy Policy</a>
+        <a href="/terms/">Terms of Service</a>
+        <a href="/sms-optin/">SMS Opt-In</a>
+        <a href="mailto:admin@h3operations.com">admin@h3operations.com</a>
+        <a href="tel:+18773682008">(877) 368-2008</a>
+      </div>
+      <div class="fmeta">© 2026 H3 Operations LLC</div>
+    </div>
+  </footer>
 
 <script>
-  /* ============================================================
-     SIGNATURE ANIMATION — missed-call ledger
-     Builds two short timestamped sequences, staggered, looping.
-     Respects prefers-reduced-motion by rendering the final state
-     once with no animation.
-     ============================================================ */
-  (function () {
-    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+(function(){
+  "use strict";
 
-    var lostSeq = [
-      { t: '8:14:00', label: 'Phone rings — customer calling about a burst pipe' },
-      { t: '8:14:22', label: 'Rings out, no answer' },
-      { t: '8:14:24', label: 'Voicemail picked up', final: true },
-      { t: '8:15:10', label: 'Caller hangs up, calls the next name on the list', final: true }
-    ];
-    var wonSeq = [
-      { t: '8:14:00', label: 'Phone rings — customer calling about a burst pipe' },
-      { t: '8:14:03', label: 'H3 answers, greets caller by business name' },
-      { t: '8:14:19', label: 'Caller info + issue captured', final: true },
-      { t: '8:14:31', label: 'Callback scheduled, job booked', final: true }
-    ];
-
-    function renderSeq(containerId, seq, animate) {
-      var el = document.getElementById(containerId);
-      if (!el) return;
-      el.innerHTML = '';
-      seq.forEach(function (row, i) {
-        var div = document.createElement('div');
-        div.className = 'ledger__row' + (row.final ? ' is-final' : '');
-        div.innerHTML = '<time>' + row.t + '</time><span>' + row.label + '</span>';
-        if (animate) {
-          div.style.animationDelay = (i * 550) + 'ms';
-        } else {
-          div.style.opacity = '1';
-          div.style.transform = 'none';
-          div.style.animation = 'none';
-        }
-        el.appendChild(div);
-      });
-    }
-
-    function playCycle() {
-      renderSeq('ledger-lost', lostSeq, true);
-      renderSeq('ledger-won', wonSeq, true);
-    }
-
-    if (reduceMotion) {
-      renderSeq('ledger-lost', lostSeq, false);
-      renderSeq('ledger-won', wonSeq, false);
-    } else {
-      playCycle();
-      setInterval(playCycle, 7000);
-    }
-  })();
-
-  /* ============================================================
-     TRACKING — CTA clicks + form submit, UTM passthrough.
-     GA4/Meta pixel IDs are placeholders (see <head>); events will
-     start reporting once real IDs are dropped in.
-     ============================================================ */
-  (function () {
-    function trackEvent(name, params) {
-      if (typeof gtag === 'function') gtag('event', name, params || {});
-      if (typeof fbq === 'function') fbq('trackCustom', name, params || {});
-    }
-
-    document.querySelectorAll('[data-cta]').forEach(function (el) {
-      el.addEventListener('click', function () {
-        trackEvent('cta_click', { cta_id: el.getAttribute('data-cta'), cta_text: el.textContent.trim() });
-      });
-    });
-
-    // Capture UTM params from the URL and store them for attribution
-    // (appended to the form as hidden fields at submit time).
+  /* ---- referral tracking (?ref=), persisted for the session, fed into both forms ---- */
+  function getRef(){
     var params = new URLSearchParams(window.location.search);
-    var utmFields = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
-    var utmData = {};
-    utmFields.forEach(function (key) {
-      var val = params.get(key);
-      if (val) {
-        utmData[key] = val;
-        var hidden = document.createElement('input');
-        hidden.type = 'hidden';
-        hidden.name = key;
-        hidden.value = val;
-        var form = document.getElementById('early-access-form');
-        if (form) form.appendChild(hidden);
-      }
-    });
-
-    var form = document.getElementById('early-access-form');
-    var status = document.getElementById('form-status');
-    if (form) {
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var submitBtn = form.querySelector('button[type="submit"]');
-        var emailInput = document.getElementById('email-input');
-
-        trackEvent('lead_magnet_signup', Object.assign({ form_id: 'early-access' }, utmData));
-
-        if (submitBtn) submitBtn.disabled = true;
-        status.textContent = 'Sending you the checklist…';
-        status.className = 'form-status is-success';
-
-        // Kit's endpoint doesn't return a readable CORS response for a
-        // plain fetch, so this posts "fire and forget" (mode: no-cors)
-        // and we show an optimistic success state. Kit still sends its
-        // own confirmation email per its double opt-in default.
-        fetch(form.action, {
-          method: 'POST',
-          mode: 'no-cors',
-          body: new FormData(form)
-        }).then(function () {
-          status.textContent = 'You\'re in! Check your inbox to confirm your subscription.';
-          if (emailInput) emailInput.value = '';
-          if (submitBtn) submitBtn.disabled = false;
-        }).catch(function () {
-          status.textContent = 'Something went wrong — please try again, or email michael@h3operations.com directly.';
-          status.className = 'form-status is-error';
-          if (submitBtn) submitBtn.disabled = false;
-        });
-      });
+    var fromUrl = params.get('ref');
+    if (fromUrl) {
+      try { sessionStorage.setItem('h3_ref', fromUrl); } catch(e){}
+      return fromUrl;
     }
-  })();
+    try { return sessionStorage.getItem('h3_ref') || ''; } catch(e){ return ''; }
+  }
+  var ref = getRef();
+
+  /* ---- Live Cloud Functions (v1, us-central1, project h3operations-prod).
+     Names/region confirmed against the deployed submitSignupRequest /
+     submitChecklistRequest functions in functions/src/index.ts. ---- */
+  var ENDPOINTS = {
+    signup: 'https://us-central1-h3operations-prod.cloudfunctions.net/submitSignupRequest',
+    checklist: 'https://us-central1-h3operations-prod.cloudfunctions.net/submitChecklistRequest'
+  };
+
+  function showMsg(el, text, ok){
+    el.textContent = text;
+    el.className = 'formmsg show ' + (ok ? 'ok' : 'err');
+  }
+
+  function wireForm(formId, msgId, endpoint, buildPayload, successText){
+    var form = document.getElementById(formId);
+    var msg = document.getElementById(msgId);
+    if (!form) return;
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var btn = form.querySelector('button[type="submit"]');
+      var payload = buildPayload(form);
+      btn.disabled = true;
+      msg.className = 'formmsg';
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function(res){
+        if (!res.ok) throw new Error('bad status ' + res.status);
+        return res.json().catch(function(){ return {}; });
+      }).then(function(){
+        form.reset();
+        showMsg(msg, successText, true);
+      }).catch(function(){
+        showMsg(msg, "Something went wrong sending that — please try again, or email admin@h3operations.com.", false);
+      }).finally(function(){
+        btn.disabled = false;
+      });
+    });
+  }
+
+  wireForm('checklistForm', 'cl-msg', ENDPOINTS.checklist, function(form){
+    return {
+      email: form.email.value.trim().toLowerCase(),
+      ref: ref,
+      source: 'website-v1-checklist'
+    };
+  }, "We'll email it over shortly.");
+
+  wireForm('signupForm', 'su-msg', ENDPOINTS.signup, function(form){
+    return {
+      businessName: form.businessName.value.trim(),
+      contactName: form.contactName.value.trim(),
+      phone: form.phone.value.trim(),
+      email: form.email.value.trim().toLowerCase(),
+      ref: ref,
+      source: 'website-v1-signup'
+    };
+  }, "Got it — we'll be in touch shortly to get you set up.");
+})();
 </script>
 
 </body>

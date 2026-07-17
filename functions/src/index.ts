@@ -6,6 +6,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import customersSchema from "./schema/customers.js";
 import jobsSchema from "./schema/jobs.js";
 import smsOptinsSchema from "./schema/smsOptins.js";
+import signupRequestsSchema from "./schema/signupRequests.js";
+import checklistRequestsSchema from "./schema/checklistRequests.js";
 
 admin.initializeApp();
 
@@ -974,6 +976,259 @@ export const submitSmsOptin = functions
     } catch (err: any) {
       // No PII in logs (§9.2) — log the failure, not the phone number.
       console.error("submitSmsOptin failed", err?.message);
+      res.status(500).send("Something went wrong.");
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// Public marketing capture endpoints (submitSignupRequest, submitChecklistRequest)
+// ---------------------------------------------------------------------------
+
+// Origins allowed to call the marketing capture endpoints from a browser. Same
+// posture as SMS_OPTIN_ALLOWED_ORIGINS: reflect an allowlisted Origin back so we
+// don't run a blanket wildcard on a PII-writing endpoint. CORS is NOT the
+// security boundary (any server can POST) — server-side validation is (§8 S2).
+const MARKETING_SITE_ORIGINS = new Set([
+  "https://h3operations.com",
+  "https://www.h3operations.com",
+]);
+
+/**
+ * S4 rate limiting (§8) for the PUBLIC, unauthenticated marketing endpoints.
+ *
+ * DECISION (2026-07): best-effort IN-MEMORY, PER-INSTANCE sliding window keyed by
+ * client IP — deliberately NOT a Firestore-backed global limiter. Lean-first
+ * (§1): these are low-traffic pre-account forms, and every write is already
+ * idempotent (one doc per phone / per email), so a repeat submitter can't pile up
+ * documents regardless. maxInstances (below) is the hard GLOBAL cost cap (§8 S4);
+ * this map curbs burst abuse from one IP on a warm instance without the read/
+ * write cost and GC burden of a rate-limit collection. Not a security boundary —
+ * it degrades gracefully (a cold/rotated instance simply starts a fresh window).
+ * If abuse outgrows this, graduate to a Firestore/Redis limiter with a TTL.
+ */
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX_PER_WINDOW = 5; // per IP per window, per instance
+const rateLimitHits = new Map<string, number[]>();
+
+/** Best-effort client IP: GCP places the real caller first in x-forwarded-for. */
+function clientIp(req: any): string {
+  const fwd = (req.headers["x-forwarded-for"] as string | undefined) ?? "";
+  const first = fwd.split(",")[0]?.trim();
+  return first || (req.ip as string) || "unknown";
+}
+
+/**
+ * Record a hit for `key` and report whether it is now over the limit.
+ * @returns true if the caller is OVER the limit (reject with 429).
+ */
+function isRateLimited(key: string): boolean {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const hits = (rateLimitHits.get(key) ?? []).filter((t) => t > windowStart);
+  if (hits.length >= RATE_LIMIT_MAX_PER_WINDOW) {
+    rateLimitHits.set(key, hits); // keep the pruned list; do not count this attempt
+    return true;
+  }
+  hits.push(now);
+  rateLimitHits.set(key, hits);
+  // Opportunistic GC so a long-lived instance's map can't grow unbounded.
+  if (rateLimitHits.size > 5000) {
+    for (const [k, v] of rateLimitHits) {
+      const pruned = v.filter((t) => t > windowStart);
+      if (pruned.length === 0) rateLimitHits.delete(k);
+      else rateLimitHits.set(k, pruned);
+    }
+  }
+  return false;
+}
+
+/** Apply the shared marketing-endpoint CORS headers. Returns the resolved Origin. */
+function setMarketingCors(req: any, res: any): void {
+  const origin = req.headers.origin as string | undefined;
+  res.set(
+    "Access-Control-Allow-Origin",
+    origin && MARKETING_SITE_ORIGINS.has(origin) ? origin : "https://h3operations.com",
+  );
+  res.set("Vary", "Origin");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+}
+
+/**
+ * submitSignupRequest — public HTTPS endpoint backing the "Get set up" form on
+ * the static marketing site (h3-website/public/index.html).
+ *
+ * Same guarded-public posture as submitSmsOptin: invoker:"public" (pre-account,
+ * unauthenticated marketing capture) + explicit CORS + maxInstances cost cap, now
+ * with per-caller S4 rate limiting (§8). The real security boundary is server-
+ * side validation (§8 S2): the phone must pass the SAME NANP normalizer the CRM
+ * uses (customersSchema.customerIdFromPhone) and email/name are validated by the
+ * schema factory — client validation is UX only.
+ *
+ * The record is written at root signupRequests/{phoneDigits} (see
+ * schema/signupRequests.js for the pre-account / doc-ID-matches-customers
+ * rationale). Idempotent: a repeat submit for the same number refreshes the
+ * contact fields and moves updatedAt, but preserves the original createdAt (audit
+ * anchor) and never resets status (owned by the sales/onboarding path).
+ */
+export const submitSignupRequest = functions
+  .runWith({ invoker: "public", maxInstances: 5 })
+  .https.onRequest(async (req, res) => {
+    setMarketingCors(req, res);
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).send("Method not allowed");
+      return;
+    }
+    if (isRateLimited(`submitSignupRequest:${clientIp(req)}`)) {
+      res.status(429).send("Too many requests. Please try again in a minute.");
+      return;
+    }
+
+    const { businessName, contactName, phone, email, ref, source } = (req.body ?? {}) as {
+      businessName?: string;
+      contactName?: string;
+      phone?: string;
+      email?: string;
+      ref?: string;
+      source?: string;
+    };
+
+    // Reuse the CRM phone normalizer so a signup request and a future customer
+    // keyed by the same number share one doc-ID shape (E.164 digits, no "+").
+    const rawPhone = phone ?? "";
+    const docId = customersSchema.customerIdFromPhone(rawPhone);
+    const phoneE164 = customersSchema.normalizePhoneE164(rawPhone);
+    if (!docId || !phoneE164) {
+      res.status(400).send("Enter a valid US phone number.");
+      return;
+    }
+
+    // Build the first-write body now; this also validates the remaining required
+    // fields (name/email) via the schema factory regardless of write path below.
+    let firstWriteBody;
+    try {
+      firstWriteBody = signupRequestsSchema.buildNewSignupRequest({
+        businessName,
+        contactName,
+        phone: phoneE164,
+        email,
+        ref: ref ?? null,
+        source,
+      });
+    } catch {
+      res.status(400).send("Please check the form and try again.");
+      return;
+    }
+
+    try {
+      const docRef = db.collection(signupRequestsSchema.SIGNUP_REQUESTS_COLLECTION).doc(docId);
+      const existing = await docRef.get();
+      if (existing.exists) {
+        // Refresh contact fields without clobbering createdAt or status.
+        await docRef.set(
+          signupRequestsSchema.buildSignupRequestRefresh({
+            businessName,
+            contactName,
+            email,
+            ref: ref ?? null,
+            source,
+          }),
+          { merge: true },
+        );
+      } else {
+        await docRef.set(firstWriteBody);
+      }
+      res.status(200).json({ ok: true });
+    } catch (err: any) {
+      // No PII in logs (§9.2) — log the failure, not the submitted details.
+      console.error("submitSignupRequest failed", err?.message);
+      res.status(500).send("Something went wrong.");
+    }
+  });
+
+/**
+ * submitChecklistRequest — public HTTPS endpoint backing the "email me the
+ * checklist" lead-magnet form on the static marketing site.
+ *
+ * Same guarded-public posture as submitSignupRequest (invoker:"public" + CORS +
+ * maxInstances + S4 rate limiting). The email is validated AND normalized by the
+ * schema factory (§8 S2); normalizeEmail also guarantees a doc-ID-safe value
+ * (rejects '/'/whitespace), used both as the doc ID and the stored `email`.
+ *
+ * The record is written at root checklistRequests/{normalizedEmail}. Idempotent:
+ * a repeat submit for the same email refreshes provenance and moves updatedAt,
+ * but preserves the original createdAt and never resets status (owned by the
+ * fulfilment path).
+ */
+export const submitChecklistRequest = functions
+  .runWith({ invoker: "public", maxInstances: 5 })
+  .https.onRequest(async (req, res) => {
+    setMarketingCors(req, res);
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).send("Method not allowed");
+      return;
+    }
+    if (isRateLimited(`submitChecklistRequest:${clientIp(req)}`)) {
+      res.status(429).send("Too many requests. Please try again in a minute.");
+      return;
+    }
+
+    const { email, ref, source } = (req.body ?? {}) as {
+      email?: string;
+      ref?: string;
+      source?: string;
+    };
+
+    // Normalize + validate the email; this is BOTH the doc ID and the stored
+    // field, so a bad address is rejected before any Firestore access.
+    let normalizedEmail: string;
+    try {
+      normalizedEmail = checklistRequestsSchema.normalizeEmail(email ?? "");
+    } catch {
+      res.status(400).send("Enter a valid email address.");
+      return;
+    }
+
+    let firstWriteBody;
+    try {
+      firstWriteBody = checklistRequestsSchema.buildNewChecklistRequest({
+        email: normalizedEmail,
+        ref: ref ?? null,
+        source,
+      });
+    } catch {
+      res.status(400).send("Please check the form and try again.");
+      return;
+    }
+
+    try {
+      const docRef = db
+        .collection(checklistRequestsSchema.CHECKLIST_REQUESTS_COLLECTION)
+        .doc(normalizedEmail);
+      const existing = await docRef.get();
+      if (existing.exists) {
+        // Refresh provenance without clobbering createdAt or status.
+        await docRef.set(
+          checklistRequestsSchema.buildChecklistRequestRefresh({ ref: ref ?? null, source }),
+          { merge: true },
+        );
+      } else {
+        await docRef.set(firstWriteBody);
+      }
+      res.status(200).json({ ok: true });
+    } catch (err: any) {
+      // No PII in logs (§9.2) — log the failure, not the submitted email.
+      console.error("submitChecklistRequest failed", err?.message);
       res.status(500).send("Something went wrong.");
     }
   });
