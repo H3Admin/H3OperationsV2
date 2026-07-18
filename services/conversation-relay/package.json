@@ -1,0 +1,20 @@
+{
+  "name": "conversation-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production Twilio ConversationRelay + Gemini streaming voice pipeline (Cloud Run). Replaces the Gather-based handleInboundCall/handleSpeech flow.",
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.0",
+    "@google/generative-ai": "^0.24.1",
+    "twilio": "^6.0.2",
+    "ws": "^8.18.0"
+  }
+}

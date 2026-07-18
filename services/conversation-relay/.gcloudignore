@@ -1,0 +1,7 @@
+# Keep the source upload lean; the buildpack reinstalls from package.json.
+node_modules/
+.git/
+.env
+.env.*
+.DS_Store
+npm-debug.log
