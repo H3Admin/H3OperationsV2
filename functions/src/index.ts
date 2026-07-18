@@ -234,7 +234,7 @@ export const handleSpeech = functions
     `1. Understand the caller's reason for calling.`,
     `2. Capture the caller's name, phone number, and reason for calling.`,
     `3. Keep responses concise and conversational — this is a phone call, not a chat.`,
-    `4. When you have captured all needed information or the caller indicates they are done, append [DONE] on a new line at the very end of your response.`,
+    `4. When you have captured all needed information or the caller indicates they are done, ALWAYS end with a warm spoken sign-off that thanks them for calling ${businessName} and tells them someone will be in touch shortly (for example: "Thank you for calling ${businessName} — we'll be in touch shortly. Have a great day!"). Put that sign-off as the last spoken sentence, then append [DONE] on a new line at the very end. Never end the call without speaking that closing line.`,
   ].filter(Boolean).join("\n");
 
   // Reconstruct chat history from stored turns
@@ -247,14 +247,53 @@ export const handleSpeech = functions
   const geminiModel = genAI.getGenerativeModel({
     model: "gemini-3.5-flash",
     systemInstruction: systemPrompt,
+    // DECISION (2026-07): NO maxOutputTokens cap. gemini-3.5-flash is a thinking
+    // model, and this SDK (@google/generative-ai 0.24.1) counts thinking tokens
+    // against maxOutputTokens with no separate thinking budget. A 200-token cap
+    // (tried for dead-air latency) truncated the model mid-thought
+    // (finishReason MAX_TOKENS), so .text() returned a leaked reasoning fragment
+    // (e.g. "keep short and simple") to <Say> instead of a real reply. Latency
+    // work must DISABLE thinking — which requires migrating to the @google/genai
+    // SDK (thinkingBudget) — not capping output here. Do not re-add this cap.
   });
   const chat = geminiModel.startChat({ history: chatHistory });
-  const result = await chat.sendMessage(SpeechResult);
-  const rawResponse = result.response.text().trim();
+
+  // Wrap the model round-trip: a Gemini failure must never crash this webhook
+  // into a dead call. On error we log (no PII, §9.2) and re-prompt so the caller
+  // can keep talking rather than hitting Twilio's default failure hang-up.
+  // PERF (§10 dead-air diagnosis): the timing log attributes the between-request
+  // gap to Gemini vs. Gather from Cloud Logging. Milliseconds only — no PII.
+  let rawResponse: string;
+  try {
+    const geminiStart = Date.now();
+    const result = await chat.sendMessage(SpeechResult);
+    functions.logger.info("handleSpeech: gemini round-trip", { ms: Date.now() - geminiStart });
+    rawResponse = result.response.text().trim();
+  } catch (err: any) {
+    functions.logger.error("handleSpeech: Gemini call failed", { message: err?.message });
+    sendTwiml(
+      `<Gather input="speech" enhanced="true" speechModel="phone_call" speechTimeout="2" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
+        `<Say voice="Polly.Joanna-Neural">Sorry, I didn't quite catch that. Could you say that again?</Say>` +
+      `</Gather>`,
+    );
+    return;
+  }
 
   // Gemini signals end-of-conversation by including [DONE]
   const isDone = rawResponse.includes("[DONE]");
   const aiText = rawResponse.replace(/\[DONE\]/g, "").trim();
+
+  // If the model produced no spoken text and did not signal done, never emit an
+  // empty <Say>. Re-prompt (don't record an empty turn) so the caller continues.
+  if (!isDone && !aiText) {
+    functions.logger.warn("handleSpeech: empty model turn — re-prompting");
+    sendTwiml(
+      `<Gather input="speech" enhanced="true" speechModel="phone_call" speechTimeout="2" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
+        `<Say voice="Polly.Joanna-Neural">Sorry, could you say that again?</Say>` +
+      `</Gather>`,
+    );
+    return;
+  }
 
   // Append the new turn to the call doc
   const confidence = Confidence ? parseFloat(Confidence) : null;
@@ -271,7 +310,15 @@ export const handleSpeech = functions
   const spokenText = escapeTwiml(aiText);
 
   if (isDone) {
-    sendTwiml(`<Say voice="Polly.Joanna-Neural">${spokenText}</Say><Hangup/>`);
+    // Guarantee a spoken close before hanging up. The prompt instructs the model
+    // to end with a warm sign-off, but if a [DONE] turn ever comes back with no
+    // spoken text, fall back to a generic close so we never hang up on silence.
+    // Kept tenant-agnostic (no hardcoded business name) — the model's own close
+    // is the normal path and carries the business name from the playbook.
+    const closeText = escapeTwiml(
+      aiText || "Thank you for calling. We'll be in touch shortly. Have a great day!",
+    );
+    sendTwiml(`<Say voice="Polly.Joanna-Neural">${closeText}</Say><Hangup/>`);
   } else {
     sendTwiml(
       `<Gather input="speech" enhanced="true" speechModel="phone_call" speechTimeout="2" action="${CF_BASE_URL}/handleSpeech?callId=${callId}&amp;accountId=${accountId}" method="POST">` +
@@ -1230,5 +1277,89 @@ export const submitChecklistRequest = functions
       // No PII in logs (§9.2) — log the failure, not the submitted email.
       console.error("submitChecklistRequest failed", err?.message);
       res.status(500).send("Something went wrong.");
+    }
+  });
+
+// Sender for founder notifications: the H3 toll-free line. See notifyNewLead's
+// DECISION on messaging verification.
+const FOUNDER_NOTIFY_FROM = "+18773682008";
+
+/**
+ * notifyNewLead — Firestore onCreate trigger that texts the founder when the
+ * Receptionist captures a new inbound-call lead.
+ *
+ * Fires on accounts/{accountId}/customers/{customerId} creation (the real,
+ * multi-tenant-scoped path — customers never live at the root). Only inbound-call
+ * leads notify: it gates on source === CUSTOMER_SOURCE.PHONE_CALL ('phone_call'),
+ * using the schema constant rather than a magic string so it tracks the read-side
+ * schema (§2.2). Manual entries (manual_entry) and any other write path are
+ * silently ignored.
+ *
+ * Message: "New lead: {displayName} — {phone}. Call them back." Falls back to
+ * "New lead: {phone}. Call them back." when the receptionist could not extract a
+ * name (displayName is null) — we never fabricate a name.
+ *
+ * Secrets (§8 S1): all three come from Secret Manager, never code or git —
+ *   • TWILIO_AUTH_TOKEN   (already used by the webhook signature check)
+ *   • TWILIO_ACCOUNT_SID  (required to build the Twilio REST client; the existing
+ *     code only ever used the static twilio.validateRequest, which needs the token
+ *     alone, so the SID was never stored — this is a genuinely new secret, not a
+ *     duplicated one)
+ *   • FOUNDER_NOTIFY_PHONE (the founder's personal cell — the single recipient)
+ * The sender is the toll-free line (FOUNDER_NOTIFY_FROM). maxInstances:3 caps
+ * cost on this background trigger (§8 S4); no per-caller throttle — it's an
+ * internal one-recipient notification, not a public surface.
+ *
+ * No PII in logs (§9.2): we log that a notification was sent or failed, never the
+ * recipient, the lead's name, or the phone number.
+ *
+ * DECISION (2026-07): the toll-free number +18773682008 is NOT YET verified for
+ * outbound messaging (Founder Task 2, in progress). Low-volume internal texts to a
+ * single known cell will most likely deliver, but if a carrier filters them the
+ * fix is COMPLETING that messaging verification — NOT a code change here. This
+ * function is correct as written; delivery is an account-provisioning concern.
+ *
+ * DECISION (2026-07): best-effort delivery — a Twilio failure is logged and
+ * swallowed, never re-thrown. Re-throwing would make Firestore retry the trigger
+ * (at-least-once) and risk duplicate texts for a notification not worth retrying.
+ */
+export const notifyNewLead = functions
+  .runWith({
+    maxInstances: 3,
+    secrets: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "FOUNDER_NOTIFY_PHONE"],
+  })
+  .firestore.document("accounts/{accountId}/customers/{customerId}")
+  .onCreate(async (snap) => {
+    const data = snap.data() ?? {};
+
+    // Gate: inbound-call leads only. Manual/other write paths never notify.
+    if (data.source !== customersSchema.CUSTOMER_SOURCE.PHONE_CALL) {
+      return;
+    }
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const founderPhone = process.env.FOUNDER_NOTIFY_PHONE;
+    if (!accountSid || !authToken || !founderPhone) {
+      // Config gap — log without any PII; there is nothing safe to send.
+      console.error("notifyNewLead: missing Twilio creds or FOUNDER_NOTIFY_PHONE secret");
+      return;
+    }
+
+    const phone = typeof data.phone === "string" ? data.phone : "";
+    const displayName =
+      typeof data.displayName === "string" && data.displayName ? data.displayName : null;
+    const body = displayName
+      ? `New lead: ${displayName} — ${phone}. Call them back.`
+      : `New lead: ${phone}. Call them back.`;
+
+    try {
+      const client = twilio(accountSid, authToken);
+      await client.messages.create({ to: founderPhone, from: FOUNDER_NOTIFY_FROM, body });
+      // §9.2: confirm the send happened, never who it went to or what it said.
+      console.log("notifyNewLead: notification sent");
+    } catch (err: any) {
+      // Best-effort (see DECISION) — log the failure with no PII, do not rethrow.
+      console.error("notifyNewLead: Twilio send failed", err?.message);
     }
   });
