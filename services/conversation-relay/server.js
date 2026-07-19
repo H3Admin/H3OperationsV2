@@ -20,18 +20,27 @@
  * SAME createLeadFromCall path as production (see lead-capture.js); notifyNewLead
  * fires on the resulting customers/ doc automatically.
  *
+ * Call doc: a call record is created at setup at accounts/{accountId}/calls/{callSid}
+ * (schema: calls-schema.js / functions/src/schema/calls.js) and turns are appended
+ * per-turn. This service writes creation + turns + isNewLead ONLY — the terminal
+ * update (endedAt / durationSeconds / final status) is owned by handleCallStatus.
+ *
  * Per-call stdout logging (§9.2 — ms only, no name/number/transcript):
  *   turnLatencyMs=<n>          prompt received -> first text token sent
  *   totalCallDurationMs=<n>    setup -> socket close
  *   leadWrite=<created|exists|skipped_unparseable|error>
+ *   callDoc=<created|exists|skipped_missing_key|error>
+ *   turnAppend=error           (only on failure; success is silent)
  */
 
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
-import { Firestore } from '@google-cloud/firestore';
+import { Firestore, FieldValue } from '@google-cloud/firestore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { buildSystemPrompt, DONE_SENTINEL, GEMINI_MODEL } from './receptionist-prompt.js';
 import { createLeadFromCall } from './lead-capture.js';
+import { buildNewCall } from './calls-schema.js';
+import { shapeTurnForDoc, isNewLeadFromOutcome, chainWrite } from './call-doc.js';
 import { isValidTwilioSignature } from './twilio-signature.js';
 import { installProcessSafetyNet } from './gemini-stream-safety.js';
 
@@ -202,6 +211,10 @@ async function handleTwiml(req, res) {
       `<ConversationRelay url="${wsUrl}" ttsProvider="Google" voice="${xmlEscape(TTS_VOICE)}" interruptible="true">` +
         `<Parameter name="accountId" value="${xmlEscape(accountId)}"/>` +
         `<Parameter name="callerFrom" value="${xmlEscape(callerFrom)}"/>` +
+        // dialedTo (the account's own line) passed from the SIGNATURE-VALIDATED
+        // request, like accountId/callerFrom — the /ws socket can't be signed, so
+        // trusted call metadata is derived here, not read off the open socket.
+        `<Parameter name="dialedTo" value="${xmlEscape(dialedNumber)}"/>` +
       '</ConversationRelay>' +
     '</Connect>',
   );
@@ -232,6 +245,7 @@ wss.on('connection', (ws, req) => {
     callSid: null,
     accountId: null,
     from: '',
+    to: null, // the dialed H3 line (trusted dialedTo param); stored on the call doc
     connectedAt: Date.now(),
     model: null, // ONE model (with systemInstruction) per connection
     history: [], // manual chat history: [{ role, parts }] — see runTurn / commitTurn
@@ -239,6 +253,8 @@ wss.on('connection', (ws, req) => {
     currentTurn: null, // the turn currently streaming; interrupt aborts it
     turnChain: Promise.resolve(), // serializes turns so history is written in order
     leadWritten: false,
+    docRef: null, // accounts/{accountId}/calls/{callSid} ref once created at setup
+    docWriteChain: Promise.resolve(), // serializes fire-and-forget turn appends in order
   };
 
   ws.on('message', async (raw) => {
@@ -298,6 +314,7 @@ wss.on('connection', (ws, req) => {
     const customParams = msg.customParameters || {};
     call.accountId = customParams.accountId || null;
     call.from = customParams.callerFrom || msg.from || '';
+    call.to = customParams.dialedTo || msg.to || null;
 
     if (!call.accountId) {
       console.error('ws: setup missing accountId — cannot start session');
@@ -308,6 +325,13 @@ wss.on('connection', (ws, req) => {
     if (!GEMINI_API_KEY) {
       console.error('ws: GEMINI_API_KEY not set — prompts will fail');
     }
+
+    // Create the call doc now, before call.model is set. Prompts are gated on
+    // call.model (see handlePrompt), so every turn — and thus every turn append
+    // (appendTurnToDoc) — is guaranteed to run after this resolves. A failure
+    // here degrades to "no call history / no summary email" but must NEVER stop
+    // the call or lead capture, so createCallDoc swallows its own errors.
+    await createCallDoc();
 
     let voiceConfig;
     try {
@@ -454,7 +478,13 @@ wss.on('connection', (ws, req) => {
     if (heard) {
       call.history.push(userContent);
       call.history.push({ role: 'model', parts: [{ text: heard }] });
-      call.turns.push({ callerText: text, aiText: heard });
+      const turnRecord = { callerText: text, aiText: heard };
+      call.turns.push(turnRecord);
+      // Persist this turn to the call doc at the same commit point history uses.
+      // seq = this turn's 0-based position: a monotonic per-call counter so two
+      // identical {callerText, aiText} turns stay distinct arrayUnion elements
+      // (deep-equal repeats would otherwise be silently deduped away).
+      appendTurnToDoc(turnRecord, call.turns.length - 1);
     }
 
     if (sawDone && !turn.aborted) {
@@ -495,6 +525,79 @@ wss.on('connection', (ws, req) => {
     safeSend(ws, { type: 'text', token, last: !!last });
   }
 
+  // -- call doc (creation + turn appends) -----------------------------------
+
+  // Create accounts/{accountId}/calls/{callSid} at setup. SECURITY: server-side
+  // Admin (ADC) write inside the already-signature-validated /twiml → /ws flow —
+  // no new endpoint, no new surface. Uses .create() (not .set()) so a Twilio
+  // retry / socket reconnect against an existing doc no-ops on ALREADY_EXISTS
+  // instead of resetting startedAt. isNewLead is seeded provisionally false and
+  // set authoritatively after the lead write resolves (see maybeWriteLead).
+  async function createCallDoc() {
+    if (!call.accountId || !call.callSid || !call.from) {
+      // Missing a required key — can't build a well-formed call doc. Call + lead
+      // capture continue without one (degraded: no call history / summary email).
+      console.warn(`ws: callDoc=skipped_missing_key sid=${call.callSid}`);
+      return;
+    }
+    const ref = db
+      .collection('accounts').doc(call.accountId)
+      .collection('calls').doc(call.callSid);
+    try {
+      const body = buildNewCall({
+        callSid: call.callSid,
+        accountId: call.accountId,
+        from: call.from,
+        to: call.to,
+        isNewLead: false, // provisional; authoritative value set post-lead-write
+      });
+      await ref.create(body);
+      call.docRef = ref;
+      console.log(`ws: callDoc=created sid=${call.callSid}`);
+    } catch (err) {
+      if (isAlreadyExists(err)) {
+        // A retry/reconnect already created it — keep the ref (so turn appends
+        // and the isNewLead update still target it), but never reset startedAt.
+        call.docRef = ref;
+        console.log(`ws: callDoc=exists sid=${call.callSid}`);
+        return;
+      }
+      // Any other failure: proceed without a call doc. Never break the call.
+      console.error(`ws: callDoc=error sid=${call.callSid}: ${err?.message}`);
+    }
+  }
+
+  // Append one committed turn to the call doc, shaped to the reader contract
+  // ({ callerText, aiText } + monotonic seq). Fire-and-forget on a serialized,
+  // never-rejecting chain (chainWrite): appends land in speak order, a
+  // transcript-write failure is console.error'd (visible in Cloud Logging) and
+  // can NEVER throw into the live call (§1 — call first), and one failed write
+  // doesn't poison later ones. Per-turn (not final-flush) so a mid-call process
+  // crash still leaves handleCallStatus an accurate transcript for the summary email.
+  function appendTurnToDoc(turnRecord, seq) {
+    if (!call.docRef) return; // no call doc (create failed/skipped) — nothing to append to
+    const shaped = shapeTurnForDoc(turnRecord, seq);
+    call.docWriteChain = chainWrite(
+      call.docWriteChain,
+      () => call.docRef.update({ turns: FieldValue.arrayUnion(shaped) }),
+      (err) => console.error(`ws: turnAppend=error sid=${call.callSid}: ${err?.message}`),
+    );
+  }
+
+  // Set the authoritative isNewLead on the call doc. Only writes when the lead
+  // write reported 'created' — the provisional seed already covers the false
+  // cases (callback / unparseable / no lead), so a returning-customer call needs
+  // no extra write. Isolated: an update failure must not undo the lead write.
+  async function updateIsNewLead(outcome) {
+    if (!call.docRef) return;
+    if (!isNewLeadFromOutcome(outcome)) return; // seed is already false
+    try {
+      await call.docRef.update({ isNewLead: true });
+    } catch (err) {
+      console.error(`ws: isNewLeadUpdate=error sid=${call.callSid}: ${err?.message}`);
+    }
+  }
+
   // Idempotent per connection AND per customer doc (createLeadFromCall re-checks
   // existence). §9.2: log only the outcome, never name/number/transcript.
   async function maybeWriteLead(trigger) {
@@ -504,6 +607,9 @@ wss.on('connection', (ws, req) => {
     try {
       const outcome = await createLeadFromCall(db, call.accountId, call.from, call.turns, GEMINI_API_KEY);
       console.log(`ws: leadWrite=${outcome} trigger=${trigger} sid=${call.callSid}`);
+      // isNewLead is authoritative only now (created vs. existing customer). Set
+      // on the call doc from the same signal, not guessed at create time.
+      await updateIsNewLead(outcome);
     } catch (err) {
       // Reset so the close-time safety net can retry a transient failure.
       call.leadWritten = false;
@@ -511,6 +617,17 @@ wss.on('connection', (ws, req) => {
     }
   }
 });
+
+// ALREADY_EXISTS from Firestore .create(): gRPC code 6, or the string forms the
+// client surfaces. A retry/reconnect hitting an existing call doc is expected —
+// the first write wins and we must not reset startedAt.
+function isAlreadyExists(err) {
+  return (
+    err?.code === 6 ||
+    err?.code === 'already-exists' ||
+    /already[\s_-]?exists/i.test(err?.message || '')
+  );
+}
 
 // ---------------------------------------------------------------------------
 // helpers
