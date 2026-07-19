@@ -33,6 +33,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { buildSystemPrompt, DONE_SENTINEL, GEMINI_MODEL } from './receptionist-prompt.js';
 import { createLeadFromCall } from './lead-capture.js';
 import { isValidTwilioSignature } from './twilio-signature.js';
+import { installProcessSafetyNet } from './gemini-stream-safety.js';
 
 const PORT = process.env.PORT || 8080;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -56,6 +57,13 @@ const TTS_VOICE = process.env.TTS_VOICE || 'en-US-Journey-O';
 // key file and no secret (task #7). Same service account the service runs under.
 const db = new Firestore();
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
+
+// Barge-in safety net: an aborted Gemini stream must NEVER crash the process —
+// a crash drops the live call, which is worse than the dead air ConversationRelay
+// replaced. The primary handling is per-turn in runTurn (below); this is the
+// last-resort process-level catch for any abort-path rejection that slips past.
+// See gemini-stream-safety.js for the teed-stream root cause.
+installProcessSafetyNet();
 
 // ---------------------------------------------------------------------------
 // Firestore lookups (mirror handleInboundCall / handleSpeech reads)
@@ -377,6 +385,23 @@ wss.on('connection', (ws, req) => {
       console.error(`ws: gemini send failed sid=${call.callSid}: ${err?.message}`);
       sendText(turn, "Sorry, I didn't catch that. Could you say that again?", true);
       return;
+    }
+
+    // PRIMARY FIX (barge-in crash): the SDK tees the response body into
+    // result.stream (read in the loop below) AND result.response (an aggregation
+    // promise it pumps immediately). We never consume result.response, but on
+    // abort() BOTH teed branches reject — and an unhandled rejection on the
+    // second one exits the whole process, dropping the call. Attach a catch so
+    // that branch is always handled. Keyed off turn.aborted (NOT the error's
+    // name/message, which is a generic "Error reading from the stream" on abort):
+    // abort is expected and silent; a non-aborted failure is logged (still
+    // non-fatal — we don't use this value). See gemini-stream-safety.js.
+    if (result?.response && typeof result.response.catch === 'function') {
+      result.response.catch((err) => {
+        if (!turn.aborted) {
+          console.error(`ws: gemini response-branch error sid=${call.callSid}: ${err?.message}`);
+        }
+      });
     }
 
     try {
