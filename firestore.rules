@@ -37,7 +37,16 @@ service cloud.firestore {
       }
 
       match /calls/{callId} {
-        allow read, write: if isAccountMember(accountId);
+        // SECURITY: server-only writes. All legitimate call writes are Admin SDK
+        // (ConversationRelay service + handleCallStatus) and bypass Rules.
+        // Clients read their own tenant's calls; no client writes. Mirrors the
+        // customers/jobs posture. (§8 S2)
+        allow read:  if isAccountMember(accountId);
+        // DECISION (2026-07): calls is server-write-only. Every legitimate write is
+        // Admin SDK (ConversationRelay service + handleCallStatus), which bypasses
+        // Rules — so a client write path has zero legitimate use and is pure attack
+        // surface. Removed it (allow write: if false). See Brief Resolved Decisions.
+        allow write: if false;
       }
 
       match /phonePlaybook/{docId} {

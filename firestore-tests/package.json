@@ -1,0 +1,15 @@
+{
+  "name": "firestore-tests",
+  "private": true,
+  "type": "module",
+  "description": "Firestore Security Rules unit tests (§7.2) — tenant-isolation + write-posture. Runs against the Firestore emulator via @firebase/rules-unit-testing. Intentionally standalone (not tied to web/ or the legacy root scaffold) so the security harness is permanent and runner-independent.",
+  "scripts": {
+    "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only firestore --config ../firebase.json 'npm run test'"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "firebase": "^12.15.0",
+    "vitest": "^3.2.7"
+  }
+}
