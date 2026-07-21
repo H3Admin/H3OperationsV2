@@ -1,6 +1,10 @@
 # H3 Operations — Coding Standards & Engineering Practices
 
-**Version:** 1.3 · **Last updated:** July 19, 2026 · **Status:** Living document. Referenced by Claude and Claude Code every session. Updated deliberately, not per-sprint.
+**Version:** 1.5 · **Last updated:** July 20, 2026 · **Status:** Living document. Referenced by Claude and Claude Code every session. Updated deliberately, not per-sprint.
+
+**v1.5 change (July 20, 2026):** Added a §10 environment fact recording the **Firestore Rules unit-test harness** — a dedicated `firestore-tests/` directory (own `package.json` + vitest node-env config) that reads the real `firestore.rules` via `readFileSync` and runs against the emulator via `npm run test:rules` (`emulators:exec --only firestore`; Node 20 + Java; no `firebase login`). Cross-referenced it from §7.2 as the concrete home for the required tenant-isolation Rules tests. Stood up alongside tightening the `calls` rule to server-write-only (client writes removed as pure attack surface — all legitimate writes are Admin SDK, bypassing Rules). No practice in §§0–9, 11 changed.
+
+**v1.4 change (July 20, 2026):** §5 (feature-toggle architecture) graduated from **PROPOSED to IN FORCE** — the first implementation shipped: the typed feature registry (§5.3A), the pure `resolveEnabledFeatures` resolver (§5.3B, unit-tested per §7.2), and the first feature-gated route (§5.3C), the Subscriber Dashboard `/dashboard`. §5's PROPOSED banner was replaced with an IN-FORCE note and the §0 status-markers note updated accordingly. §§6–7 remain PROPOSED. No other practice changed.
 
 **v1.3 change (July 18, 2026):** Added two §10 environment facts from the ConversationRelay production-hardening session — (1) `@google/generative-ai` `generateContentStream()` tees the response body, so an aborted stream's never-consumed `result.response` rejection crashes the whole Node process unless it is `.catch()`ed; (2) Cloud Run + Twilio signature validation must reconstruct the signed URL from the `SERVICE_URL` constant, never `req.headers.host`. No practice in §§0–9, 11 changed; §§5/6/7 remain PROPOSED.
 
@@ -22,7 +26,7 @@ Two companion documents exist, and the split matters:
 
 **Standing instruction (add to Project instructions):** At end of every session, when updating the Brief, confirm whether anything done that session should promote a *durable* practice into this document. Sprint state stays in the Brief; reusable standards move here. This document should also be committed to the repo root so Claude Code loads it alongside CLAUDE.md.
 
-**A note on status markers.** Sections describing practices already in force are written plainly. Sections proposing something **not yet built** — the feature-toggle architecture (§5), the Dev/Test environment (§6), and the fuller testing pyramid (§7) — open with a **⚠ PROPOSED** banner. Treat those as recommendations awaiting your sign-off, not locked decisions, until you move them into the Brief's Resolved Decisions list.
+**A note on status markers.** Sections describing practices already in force are written plainly. Sections proposing something **not yet built** — the Dev/Test environment (§6) and the fuller testing pyramid (§7) — open with a **⚠ PROPOSED** banner. Treat those as recommendations awaiting your sign-off, not locked decisions, until you move them into the Brief's Resolved Decisions list. (The feature-toggle architecture, §5, graduated to IN FORCE in v1.4 with the first feature-gated route.)
 
 ## 1\. Core engineering principles
 
@@ -190,7 +194,7 @@ A quarterly grep of `FIXME`, `HACK`, and `TODO` is a cheap health check.
 
 ## 5\. Multi-service / multi-industry architecture (feature toggles)
 
-⚠ **PROPOSED — not yet built.** This section recommends an architecture for shipping many services across many industries incrementally with smooth releases. Confirm the approach before treating it as locked; then move the confirmed decisions into the Brief.
+**IN FORCE (as of v1.4, July 20, 2026).** The first implementation of this architecture has shipped: a typed feature **registry** (§5.3A), the pure **`resolveEnabledFeatures`** resolver (§5.3B), and the first **feature-gated route** (§5.3C) — the Subscriber Dashboard `/dashboard`, gated on `subscriber_dashboard` — all in `web/src/lib/features/` + `web/src/routes/dashboard.tsx`. Industry `verticalConfig` (§5.3D) and Firestore-backed runtime overrides remain future work, built out as they earn their place; the model below is the standard they follow.
 
 ### 5.1 The problem
 
@@ -282,7 +286,7 @@ Current state: `node --test` unit tests in `functions/` (zero deps; the establis
 
 ### 7.2 Standards
 
-- **Multi-tenant isolation is security-critical and directly testable.** Firestore **Rules unit tests** (tenant A cannot read tenant B) are a required standard, not optional — this is the core promise of a multi-tenant platform.  
+- **Multi-tenant isolation is security-critical and directly testable.** Firestore **Rules unit tests** (tenant A cannot read tenant B) are a required standard, not optional — this is the core promise of a multi-tenant platform. Their concrete home is the dedicated `firestore-tests/` harness (see §10) — run against the emulator, reading the real `firestore.rules`.  
     
 - **Anything on the security path gets a test** (§8): auth boundary, signature validation, input validation.  
     
@@ -384,6 +388,8 @@ When a regulated vertical is on the roadmap: (1) confirm the specific requiremen
     
 - **Test runner:** `node --test` from `functions/`. **Dev server:** `cd web && npm run dev` (localhost:5173).  
     
+- **Firestore Rules unit tests live in a dedicated `firestore-tests/` directory** (its own `package.json` + vitest node-env config), **NOT** in the web scaffolds or `functions/`. Tests read `firestore.rules` via `readFileSync` so they exercise the **real artifact** (no rules copy to drift). Run: `cd firestore-tests && npm run test:rules` (wraps the suite in `firebase emulators:exec --only firestore`). Requires **Node 20** (§10 CLI note) + **Java** for the emulator; a firestore-only `emulators:exec` needs **no** `firebase login`. This is the concrete home for §7.2's required tenant-isolation Rules tests.  
+    
 - **Design system:** the canonical "Operator Blue" brand/token file. Consult before any front-end or brand work. (Do not use for Cadenza Kits — separate DBA, out of scope.) **`[VERIFY: exact filename and location.]`** This doc previously named it `h3-design-system.html` at project root; the file uploaded to the Claude project is named `h3-operations-style-guide.html`; and neither name appeared at repo root in the Session S VS Code listing. Confirm the real path in the repo (it may live under `web/`, `docs/`, or `h3-website/`) and correct this reference once known.
 
 ## 11\. Change management for this document
@@ -397,6 +403,10 @@ When a regulated vertical is on the roadmap: (1) confirm the specific requiremen
 - The end-of-session standing instruction (§0) is the trigger to ask: "did anything this session earn a place in the standards?"
 
 ---
+
+*v1.5 — July 20, 2026\. Added a §10 fact recording the Firestore Rules unit-test harness — a dedicated `firestore-tests/` directory (own `package.json` + vitest node-env config) that reads the real `firestore.rules` via `readFileSync` and runs against the emulator via `npm run test:rules` (`emulators:exec --only firestore`; Node 20 + Java; no `firebase login`). Cross-referenced from §7.2 as the concrete home for the required tenant-isolation Rules tests. Stood up alongside tightening the `calls` rule to server-write-only. No practice in §§0–9, 11 changed.*
+
+*v1.4 — July 20, 2026\. §5 (feature-toggle architecture) graduated from PROPOSED to IN FORCE with its first implementation: the typed feature registry (§5.3A), the pure `resolveEnabledFeatures` resolver (§5.3B, unit-tested), and the first feature-gated route (§5.3C) — the Subscriber Dashboard `/dashboard`. Replaced §5's PROPOSED banner with an IN-FORCE note; updated the §0 status-markers note. §§6–7 remain proposals awaiting founder sign-off.*
 
 *v1.3 — July 19, 2026\. Added two §10 environment facts from the ConversationRelay production-hardening session — (1) `@google/generative-ai` `generateContentStream()` teed-stream abort crash and the mandatory `.catch()` on `result.response` (key off your own abort flag, not the generic `"Error reading from the stream"`); (2) Cloud Run + Twilio signature validation reconstructing the signed URL from the `SERVICE_URL` constant, not `req.headers.host`, with byte-for-byte VoiceUrl reconciliation. Sections 5, 6, and the pyramid in 7 remain proposals awaiting founder sign-off; everything else codifies practices already in force.*
 
