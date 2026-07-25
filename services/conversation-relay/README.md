@@ -11,7 +11,7 @@ real barge-in.
 | ---------- | ---- | ------------------------------------------------------------------------- |
 | `/twiml`   | HTTP | Validates `X-Twilio-Signature`, resolves the account from the dialed number, returns `<Connect><ConversationRelay>` pointed at `/ws` with `accountId` + `callerFrom` params. |
 | `/ws`      | WS   | ConversationRelay turn loop (setup / prompt / interrupt).                 |
-| `/healthz` | HTTP | Cloud Run liveness.                                                       |
+| `/livez`   | HTTP | Cloud Run liveness. **Not `/healthz`** — Google's Front End reserves and intercepts `/healthz`, returning its own 404 before the request reaches the container. |
 
 ## What matches production exactly
 

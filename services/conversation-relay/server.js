@@ -13,7 +13,10 @@
  *                          + callerFrom as trusted <Parameter>s (derived from the
  *                          SIGNATURE-VALIDATED request, not the open socket).
  *   WS         /ws      -> the ConversationRelay turn loop.
- *   HTTP  GET  /healthz -> Cloud Run liveness.
+ *   HTTP  GET  /livez   -> Cloud Run liveness. NOT /healthz: Google's Front End
+ *                          reserves and intercepts /healthz, returning its own
+ *                          404 before the request ever reaches the container, so
+ *                          /healthz is unusable as an external health target.
  *
  * Persona: the REAL receptionist system instruction from index.ts, tenant-driven
  * from the account's phonePlaybook (see receptionist-prompt.js). Lead write: the
@@ -105,7 +108,7 @@ async function loadAccountVoiceConfig(accountId) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP: /twiml + /healthz
+// HTTP: /twiml + /livez
 // ---------------------------------------------------------------------------
 
 function xmlEscape(s) {
@@ -128,7 +131,7 @@ function readBody(req) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  if (url.pathname === '/healthz') {
+  if (url.pathname === '/livez') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
     return;
@@ -680,5 +683,5 @@ function safeSend(ws, obj) {
 }
 
 server.listen(PORT, () => {
-  console.log(`conversation-relay listening on :${PORT} (twiml=/twiml ws=/ws health=/healthz)`);
+  console.log(`conversation-relay listening on :${PORT} (twiml=/twiml ws=/ws health=/livez)`);
 });
