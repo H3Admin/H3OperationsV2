@@ -1,32 +1,30 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-hooks";
 import { useCalls } from "@/hooks/useCalls";
 import {
-  CALL_STATUS,
-  CALL_STATUS_LABELS,
-  type Call,
-  type CallStatus,
-} from "@/lib/calls-schema";
-import {
   resolveEnabledFeatures,
   type AccountContext,
 } from "@/lib/features/resolve";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { DashboardContext } from "@/lib/dashboard-context";
+import type { DateRange } from "@/lib/calls-format";
 
 /**
- * /dashboard — Subscriber Dashboard, slice 1: the account's live calls list.
+ * /dashboard — Subscriber Dashboard layout route.
  *
- * Read-only, mobile-first (operators are in the field). Two gates, both mirroring
- * the customers.index.tsx pattern:
+ * Owns what every child route needs so none of them re-derive it:
  *   1. auth — redirect to /login if not signed in.
- *   2. feature (§5.3C) — resolve the account's enabled feature set from its auth
- *      claims and require `subscriber_dashboard`; redirect home if absent. This
- *      route is the ONE consumer of resolveEnabledFeatures this slice (no nav bar
- *      yet — visible nav + nav.ts arrive with the authed-shell slice).
+ *   2. feature gate (§5.3C) — resolve the account's enabled feature set from
+ *      its auth claims and require `subscriber_dashboard`; redirect home if
+ *      absent. The ONE consumer of resolveEnabledFeatures in this slice (no
+ *      top-level nav bar yet — that arrives with the authed-shell slice).
+ *   3. the single useCalls() listener — Calls, Leads, and the detail view all
+ *      read the same in-memory list via DashboardContext rather than each
+ *      opening their own onSnapshot.
+ *   4. the date-range filter state, applied by each list view.
  *
- * Reachable by URL only for now.
+ * Renders the Calls|Leads segmented nav and the date-range inputs, then an
+ * Outlet for the active child. Reachable by URL only for now.
  */
 
 export const Route = createFileRoute("/dashboard")({
@@ -36,85 +34,19 @@ export const Route = createFileRoute("/dashboard")({
       { name: "robots", content: "noindex,nofollow" },
     ],
   }),
-  component: DashboardPage,
+  component: DashboardLayout,
 });
 
-// Format a full E.164 caller number for display; falls back to the raw value for
-// anything that isn't a NANP +1 number.
-function formatCaller(e164: string): string {
-  const m = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(e164 ?? "");
-  return m ? `(${m[1]}) ${m[2]}-${m[3]}` : e164 || "—";
-}
+const TAB_BASE =
+  "flex-1 rounded-full px-4 py-2 text-center text-sm font-semibold transition-colors";
+const TAB_ACTIVE = `${TAB_BASE} bg-accent text-accent-foreground`;
+const TAB_INACTIVE = `${TAB_BASE} text-muted-foreground`;
 
-// Firestore Timestamp → local date + time string.
-function formatStartedAt(ts: { toDate: () => Date } | null): string {
-  if (!ts) return "—";
-  try {
-    return ts.toDate().toLocaleString();
-  } catch {
-    return "—";
-  }
-}
-
-// Integer seconds → compact "m s" (or "s" under a minute).
-function formatDuration(sec: number): string {
-  if (!Number.isFinite(sec) || sec <= 0) return "—";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
-
-// Map call status → Badge variant. Terminal-negative outcomes read as
-// destructive; everything else stays neutral (secondary). Operator Blue accents
-// come from the tokens, not hardcoded hex.
-function statusVariant(status: CallStatus): "secondary" | "destructive" {
-  const negative: CallStatus[] = [
-    CALL_STATUS.NO_ANSWER,
-    CALL_STATUS.BUSY,
-    CALL_STATUS.FAILED,
-    CALL_STATUS.CANCELLED,
-  ];
-  return negative.includes(status) ? "destructive" : "secondary";
-}
-
-function CallCard({ call }: { call: Call }) {
-  return (
-    <Card className="shadow-soft">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-base font-semibold tabular-nums text-foreground">
-              {formatCaller(call.from)}
-            </p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {formatStartedAt(call.startedAt)}
-            </p>
-          </div>
-          {call.isNewLead && (
-            // Subtle new-lead marker in the accent (Operator Blue).
-            <Badge className="shrink-0 border-transparent bg-accent text-accent-foreground">
-              New lead
-            </Badge>
-          )}
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          <Badge variant={statusVariant(call.status)}>
-            {CALL_STATUS_LABELS[call.status] ?? call.status}
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            {formatDuration(call.durationSeconds)}
-          </span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function DashboardPage() {
+function DashboardLayout() {
   const nav = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { calls, loading, error } = useCalls();
+  const [dateRange, setDateRange] = useState<DateRange>({ start: "", end: "" });
 
   // Feature gate: null = still checking, true = enabled, false = denied.
   const [featureEnabled, setFeatureEnabled] = useState<boolean | null>(null);
@@ -159,39 +91,67 @@ function DashboardPage() {
   if (featureEnabled !== true) return null; // checking or denied → render nothing
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Calls
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Every call to your line, most recent first.
-        </p>
+    <DashboardContext.Provider value={{ calls, loading, error, dateRange, setDateRange }}>
+      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="flex items-center gap-1 rounded-full border border-input bg-muted/50 p-1">
+          <Link
+            to="/dashboard/calls"
+            className={TAB_INACTIVE}
+            activeProps={{ className: TAB_ACTIVE }}
+            inactiveProps={{ className: TAB_INACTIVE }}
+          >
+            Calls
+          </Link>
+          <Link
+            to="/dashboard/leads"
+            className={TAB_INACTIVE}
+            activeProps={{ className: TAB_ACTIVE }}
+            inactiveProps={{ className: TAB_INACTIVE }}
+          >
+            Leads
+          </Link>
+        </div>
+
+        <div className="mt-4 flex items-end gap-3">
+          <label className="flex-1 text-xs">
+            <span className="mb-1 block font-medium text-muted-foreground">From</span>
+            <input
+              type="date"
+              value={dateRange.start}
+              max={dateRange.end || undefined}
+              onChange={(e) =>
+                setDateRange((r) => ({ ...r, start: e.target.value }))
+              }
+              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="flex-1 text-xs">
+            <span className="mb-1 block font-medium text-muted-foreground">To</span>
+            <input
+              type="date"
+              value={dateRange.end}
+              min={dateRange.start || undefined}
+              onChange={(e) =>
+                setDateRange((r) => ({ ...r, end: e.target.value }))
+              }
+              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+            />
+          </label>
+          {(dateRange.start || dateRange.end) && (
+            <button
+              type="button"
+              onClick={() => setDateRange({ start: "", end: "" })}
+              className="pb-1.5 text-xs font-medium text-accent"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div className="mt-6">
+          <Outlet />
+        </div>
       </div>
-
-      {loading && (
-        <p className="mt-8 text-sm text-muted-foreground">Loading calls…</p>
-      )}
-
-      {error && !loading && (
-        <p className="mt-8 text-sm text-destructive">{error}</p>
-      )}
-
-      {!loading && !error && calls.length === 0 && (
-        <div className="mt-8 rounded-lg border border-dashed border-input py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            No calls yet. Calls answered by your phone agent will appear here.
-          </p>
-        </div>
-      )}
-
-      {!loading && !error && calls.length > 0 && (
-        <div className="mt-6 flex flex-col gap-3">
-          {calls.map((call) => (
-            <CallCard key={call.id} call={call} />
-          ))}
-        </div>
-      )}
-    </div>
+    </DashboardContext.Provider>
   );
 }

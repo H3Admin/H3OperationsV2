@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createUserWithEmailAndPassword, updateProfile, User } from "firebase/auth";
 import { auth } from "@/integrations/firebase/client";
 import { useAuth } from "@/lib/auth-hooks";
@@ -58,7 +58,7 @@ function SignupPage() {
 
       if (claimsFound) {
         setClaimsLoading(false);
-        nav({ to: "/account" });
+        nav({ to: "/dashboard" });
       } else {
         setClaimsLoading(false);
         setErr("Could not initialize your account. Please try logging in.");
@@ -72,10 +72,13 @@ function SignupPage() {
     }
   };
 
-  if (user && !claimsLoading) {
-    nav({ to: "/account" });
-    return null;
-  }
+  // Already signed in → dashboard. A useEffect, not a call during render (see
+  // login.tsx for why).
+  useEffect(() => {
+    if (user && !claimsLoading) nav({ to: "/dashboard" });
+  }, [user, claimsLoading, nav]);
+
+  if (user && !claimsLoading) return null;
 
   return (
     <div className="mx-auto max-w-md px-6 py-20">

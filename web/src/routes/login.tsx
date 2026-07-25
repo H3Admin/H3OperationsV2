@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/integrations/firebase/client";
 import { useAuth } from "@/lib/auth-hooks";
@@ -30,7 +30,7 @@ function LoginPage() {
     const normalizedEmail = email.toLowerCase();
     try {
       await signInWithEmailAndPassword(auth, normalizedEmail, password);
-      nav({ to: "/account" });
+      nav({ to: "/dashboard" });
     } catch (error: unknown) {
       if (error instanceof Error) {
         setErr(error.message);
@@ -40,10 +40,15 @@ function LoginPage() {
     }
   };
 
-  if (user) {
-    nav({ to: "/account" });
-    return null;
-  }
+  // Already signed in → dashboard. A useEffect, not a call during render:
+  // calling nav() while LoginPage itself is rendering trips React's
+  // "Cannot update a component while rendering a different component"
+  // warning (Transitioner updates as a side effect of this render).
+  useEffect(() => {
+    if (user) nav({ to: "/dashboard" });
+  }, [user, nav]);
+
+  if (user) return null;
 
   return (
     <div className="mx-auto max-w-md px-6 py-20">
