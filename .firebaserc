@@ -3,6 +3,17 @@
     "default": "h3operations-prod",
     "H3PROD": "h3operations-prod"
   },
-  "targets": {},
+  "targets": {
+    "h3operations-prod": {
+      "hosting": {
+        "marketing": [
+          "h3operations-prod"
+        ],
+        "dashboard": [
+          "h3operations-app"
+        ]
+      }
+    }
+  },
   "etags": {}
 }
