@@ -18,6 +18,11 @@ export interface DashboardContextValue {
   error: string | null;
   dateRange: DateRange;
   setDateRange: (range: DateRange) => void;
+  // "New since you last checked" counts, backing the Calls/Leads tab badges.
+  // Computed by the layout route against the one shared lastSeenAt (see
+  // useLastSeen's DECISION note) so both tabs agree on what counts as new.
+  newCallsCount: number;
+  newLeadsCount: number;
 }
 
 export const DashboardContext = createContext<DashboardContextValue | null>(null);

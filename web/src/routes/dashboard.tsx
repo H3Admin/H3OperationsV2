@@ -1,13 +1,15 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-hooks";
 import { useCalls } from "@/hooks/useCalls";
+import { useLastSeen } from "@/hooks/useLastSeen";
 import {
   resolveEnabledFeatures,
   type AccountContext,
 } from "@/lib/features/resolve";
 import { DashboardContext } from "@/lib/dashboard-context";
 import type { DateRange } from "@/lib/calls-format";
+import { Badge } from "@/components/ui/badge";
 
 /**
  * /dashboard — Subscriber Dashboard layout route.
@@ -22,9 +24,12 @@ import type { DateRange } from "@/lib/calls-format";
  *      read the same in-memory list via DashboardContext rather than each
  *      opening their own onSnapshot.
  *   4. the date-range filter state, applied by each list view.
+ *   5. useLastSeen() — the "new since you last checked" badge counts, and the
+ *      debounced touch() that marks the dashboard as seen.
  *
- * Renders the Calls|Leads segmented nav and the date-range inputs, then an
- * Outlet for the active child. Reachable by URL only for now.
+ * Renders the Calls|Leads segmented nav (with new-item count badges) and the
+ * date-range inputs, then an Outlet for the active child. Reachable by URL
+ * only for now.
  */
 
 export const Route = createFileRoute("/dashboard")({
@@ -46,6 +51,7 @@ function DashboardLayout() {
   const nav = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { calls, loading, error } = useCalls();
+  const { lastSeenAt, touch } = useLastSeen();
   const [dateRange, setDateRange] = useState<DateRange>({ start: "", end: "" });
 
   // Feature gate: null = still checking, true = enabled, false = denied.
@@ -87,11 +93,36 @@ function DashboardLayout() {
     if (featureEnabled === false) nav({ to: "/" });
   }, [featureEnabled, nav]);
 
+  // Mark the dashboard as seen once it's actually showing (past the auth/
+  // feature-gate checks below), not on every mount attempt. touch() itself is
+  // debounced, so this firing on calls/lastSeenAt updates doesn't spam writes.
+  useEffect(() => {
+    if (authLoading || !user || featureEnabled !== true) return;
+    touch();
+  }, [authLoading, user, featureEnabled, touch]);
+
+  // If lastSeenAt is missing (first ever visit), show no badge — don't flag
+  // every historical call/lead as "new".
+  const { newCallsCount, newLeadsCount } = useMemo(() => {
+    if (!lastSeenAt) return { newCallsCount: 0, newLeadsCount: 0 };
+    const isNew = (call: (typeof calls)[number]) => {
+      const startedAt = call.startedAt?.toDate();
+      return !!startedAt && startedAt > lastSeenAt;
+    };
+    const newCalls = calls.filter(isNew);
+    return {
+      newCallsCount: newCalls.length,
+      newLeadsCount: newCalls.filter((c) => c.isNewLead).length,
+    };
+  }, [calls, lastSeenAt]);
+
   if (authLoading || !user) return null;
   if (featureEnabled !== true) return null; // checking or denied → render nothing
 
   return (
-    <DashboardContext.Provider value={{ calls, loading, error, dateRange, setDateRange }}>
+    <DashboardContext.Provider
+      value={{ calls, loading, error, dateRange, setDateRange, newCallsCount, newLeadsCount }}
+    >
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="flex items-center gap-1 rounded-full border border-input bg-muted/50 p-1">
           <Link
@@ -100,7 +131,16 @@ function DashboardLayout() {
             activeProps={{ className: TAB_ACTIVE }}
             inactiveProps={{ className: TAB_INACTIVE }}
           >
-            Calls
+            <span className="inline-flex items-center gap-1.5">
+              Calls
+              {newCallsCount > 0 && (
+                // The one coral spark, restrained per the style guide: a small
+                // count badge, not a color wash across the tab.
+                <Badge className="border-transparent bg-coral px-1.5 py-0 text-[11px] leading-4 text-white">
+                  {newCallsCount}
+                </Badge>
+              )}
+            </span>
           </Link>
           <Link
             to="/dashboard/leads"
@@ -108,7 +148,14 @@ function DashboardLayout() {
             activeProps={{ className: TAB_ACTIVE }}
             inactiveProps={{ className: TAB_INACTIVE }}
           >
-            Leads
+            <span className="inline-flex items-center gap-1.5">
+              Leads
+              {newLeadsCount > 0 && (
+                <Badge className="border-transparent bg-coral px-1.5 py-0 text-[11px] leading-4 text-white">
+                  {newLeadsCount}
+                </Badge>
+              )}
+            </span>
           </Link>
         </div>
 

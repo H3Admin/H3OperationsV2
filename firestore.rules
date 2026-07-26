@@ -62,6 +62,21 @@ service cloud.firestore {
         allow read: if isAccountMember(accountId);
         allow write: if false;
       }
+
+      // SECURITY: per-user dashboard state (currently just lastSeenAt, backing
+      // the Calls/Leads "new since you last checked" badge). Unlike every other
+      // subcollection here, this one IS written directly by the client — there's
+      // no Admin SDK path for it — so the write must be self-scoped and
+      // field-restricted at the Rules layer itself (§8 S2): the doc id must be
+      // the caller's own uid (never another member's), the account must match
+      // their claim, and the written keys must be exactly ["lastSeenAt"] so a
+      // client can't smuggle arbitrary fields onto a doc it can freely write.
+      match /userState/{uid} {
+        allow read: if isAccountMember(accountId) && request.auth.uid == uid;
+        allow write: if isAccountMember(accountId)
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['lastSeenAt']);
+      }
     }
 
     match /invites/{inviteId} {
