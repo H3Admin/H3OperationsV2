@@ -3,10 +3,14 @@
  * Leads list views. Generated from data already loaded via useCalls(); no
  * server round-trip. Hand-rolled escaping (the row shape is simple enough that
  * a CSV library would be pure overhead for v1).
+ *
+ * Row-building lives in call-export-rows.ts and is shared with the xlsx
+ * exporter (xlsx-export.ts) so both formats render the same data, same
+ * columns, same order.
  */
 
-import { CALL_STATUS_LABELS, type Call } from "@/lib/calls-schema";
-import { formatCaller, formatDuration, formatStartedAt } from "@/lib/calls-format";
+import { buildCallExportRows, CALL_EXPORT_COLUMNS } from "@/lib/call-export-rows";
+import type { Call } from "@/lib/calls-schema";
 
 // RFC 4180-style: quote a cell (doubling embedded quotes) whenever it contains
 // a comma, quote, or newline.
@@ -14,17 +18,9 @@ function csvCell(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-const CALL_CSV_COLUMNS = ["Caller", "Started", "Duration", "Status", "New lead"] as const;
-
 export function callsToCsv(calls: Call[]): string {
-  const rows = calls.map((c) => [
-    formatCaller(c.from),
-    formatStartedAt(c.startedAt),
-    formatDuration(c.durationSeconds),
-    CALL_STATUS_LABELS[c.status] ?? c.status,
-    c.isNewLead ? "Yes" : "No",
-  ]);
-  return [CALL_CSV_COLUMNS, ...rows]
+  const rows = buildCallExportRows(calls);
+  return [CALL_EXPORT_COLUMNS, ...rows]
     .map((row) => row.map(csvCell).join(","))
     .join("\r\n");
 }

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useDashboardContext } from "@/lib/dashboard-context";
 import { filterByDateRange } from "@/lib/calls-format";
 import { callsToCsv, downloadCsv } from "@/lib/csv-export";
+import { callsToXlsxWorkbook, downloadXlsx } from "@/lib/xlsx-export";
 import { CallListCard } from "@/components/call-list-card";
 
 export const Route = createFileRoute("/dashboard/calls/")({
@@ -27,6 +28,11 @@ function CallsPage() {
     downloadCsv(`calls-${today}.csv`, callsToCsv(filtered));
   };
 
+  const exportXlsx = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    downloadXlsx(`calls-${today}.xlsx`, callsToXlsxWorkbook(filtered));
+  };
+
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
@@ -39,13 +45,22 @@ function CallsPage() {
           </p>
         </div>
         {!loading && !error && filtered.length > 0 && (
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="shrink-0 rounded-full border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
-          >
-            Export CSV
-          </button>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="shrink-0 rounded-full border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportXlsx}
+              className="shrink-0 rounded-full border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
+            >
+              Export XLSX
+            </button>
+          </div>
         )}
       </div>
 
