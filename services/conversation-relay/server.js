@@ -46,6 +46,7 @@ import { buildNewCall } from './calls-schema.js';
 import { shapeTurnForDoc, isNewLeadFromOutcome, chainWrite } from './call-doc.js';
 import { isValidTwilioSignature } from './twilio-signature.js';
 import { installProcessSafetyNet } from './gemini-stream-safety.js';
+import { checkAndConsume, fireGlobalCapAlert } from './phone-rate-limit.js';
 
 const PORT = process.env.PORT || 8080;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -183,6 +184,42 @@ async function handleTwiml(req, res) {
     return;
   }
 
+  // SECURITY (§8 S4): spend guard — sits after signature validation (so it only
+  // ever runs for a request we trust came from Twilio) and before account lookup
+  // / ConversationRelay TwiML, so a capped call never opens the costly /ws +
+  // Gemini path. See phone-rate-limit.js for the three-limit design.
+  let gate;
+  try {
+    gate = await checkAndConsume(db, { fromRaw: params.From, now: new Date() });
+  } catch (err) {
+    // DECISION: fail OPEN on a limiter error. A Firestore blip must not take down
+    // the live receptionist line; worst-case spend is still bounded by the GCP
+    // billing budget, the Twilio usage trigger, and --max-instances 2. Log loudly.
+    console.error(JSON.stringify({
+      severity: 'ERROR', marker: 'PHONE_RATE_LIMIT_ERROR',
+      message: String(err?.message || err),
+    }));
+    gate = { allowed: true, scope: null, reason: null, globalCount: null, crossedWarn: false };
+  }
+
+  if (!gate.allowed) {
+    if (gate.scope === 'global') {
+      fireGlobalCapAlert({ kind: 'capped', globalCount: gate.globalCount });
+      // A global trip may be a legit surge — greet + hang up (don't silently
+      // drop), and let the alert prompt a human to raise the cap.
+      sendXml(
+        200,
+        '<Say voice="Polly.Joanna-Neural">Thanks for calling. We are experiencing unusually high call volume right now. Please try again shortly.</Say><Hangup/>',
+      );
+    } else {
+      // Per-caller trip: an abuser gets nothing, ≈ $0. <Reject> never opens /ws.
+      sendXml(200, '<Reject reason="busy"/>');
+    }
+    return;
+  }
+
+  if (gate.crossedWarn) fireGlobalCapAlert({ kind: 'warn', globalCount: gate.globalCount });
+
   const dialedNumber = params.Called || params.To;
   const callerFrom = params.From || '';
   if (!dialedNumber) {
@@ -232,6 +269,14 @@ async function handleTwiml(req, res) {
 // each token frame goes out on its own.
 const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: false });
 
+// SECURITY (§8 S4) Layer 3: per-call bounds. /twiml + phone-rate-limit.js cap how
+// many calls can START; these cap how long/large ONE already-open call can run,
+// so a single held-open call (or a caller who keeps talking) can't run Gemini
+// unbounded. [VERIFY] whether ConversationRelay enforces its own session time
+// limit — enforce here regardless; do not rely on the provider.
+const MAX_CALL_MS = 5 * 60 * 1000; // 5 min hard cap
+const MAX_TURNS = 25;
+
 wss.on('connection', (ws, req) => {
   // BUG 2 (choppy speech): disable Nagle's algorithm on this socket. Nagle
   // coalesces small TCP writes (~40ms), which turns our steady per-token text
@@ -258,7 +303,21 @@ wss.on('connection', (ws, req) => {
     leadWritten: false,
     docRef: null, // accounts/{accountId}/calls/{callSid} ref once created at setup
     docWriteChain: Promise.resolve(), // serializes fire-and-forget turn appends in order
+    turnCount: 0, // Layer 3: caller turns this call; capped at MAX_TURNS
   };
+
+  // Layer 3 wall-clock guard: closes a held-open call even if no turns arrive
+  // (e.g. a caller who never hangs up). Started at connection open, not setup,
+  // so a call stalled before setup is still bounded. Cleared on ws.on('close').
+  const durationGuard = setTimeout(() => {
+    safeSend(ws, { type: 'text', token: "We're sorry, this call has reached its time limit. Goodbye.", last: true });
+    safeSend(ws, { type: 'end', handoffData: JSON.stringify({ reason: 'max_duration' }) });
+    try {
+      ws.close(1000, 'max_duration');
+    } catch (err) {
+      console.warn('ws: close after max_duration failed', err?.message);
+    }
+  }, MAX_CALL_MS);
 
   ws.on('message', async (raw) => {
     let msg;
@@ -292,6 +351,7 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', async () => {
+    clearTimeout(durationGuard);
     abortCurrentTurn();
     console.log(
       `ws: call ended sid=${call.callSid} session=${call.sessionId} totalCallDurationMs=${Date.now() - call.connectedAt}`,
@@ -374,6 +434,15 @@ wss.on('connection', (ws, req) => {
     if (!voicePrompt.trim()) return;
     if (!call.model) {
       console.warn('ws: prompt before setup — ignoring');
+      return;
+    }
+    // Layer 3: per-call turn bound, checked before invoking Gemini for this turn.
+    call.turnCount += 1;
+    if (call.turnCount > MAX_TURNS) {
+      abortCurrentTurn();
+      safeSend(ws, { type: 'text', token: "We're sorry, this call has reached its turn limit. Goodbye.", last: true });
+      safeSend(ws, { type: 'end', handoffData: JSON.stringify({ reason: 'max_turns' }) });
+      ws.close(1000, 'max_turns');
       return;
     }
     // Supersede any still-streaming turn (abort its generation), then queue this

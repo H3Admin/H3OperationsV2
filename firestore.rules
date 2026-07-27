@@ -100,5 +100,19 @@ service cloud.firestore {
     match /smsOptins/{phoneDigits} {
       allow read, write: if false;
     }
+
+    // Spend-guard infrastructure for the inbound voice path (§8 S4). Root-level,
+    // NOT tenant-scoped: these gate a call BEFORE we know or trust the caller's
+    // account, so they are not tenant-owned data (see phone-rate-limit.js
+    // DECISION). Admin-SDK writes only; clients get nothing. Correctness is
+    // enforced server-side — these rules exist so a leaked/forged client can
+    // neither read the counters nor write them (defense-in-depth).
+    match /phoneRateLimits/{bucket} {
+      allow read, write: if false;
+    }
+
+    match /phoneUsage/{day} {
+      allow read, write: if false;
+    }
   }
 }
