@@ -8,9 +8,12 @@
  *
  * This is the one hook in the dashboard slice that also WRITES — see
  * firestore.rules' userState block (SECURITY) for the self-scoped,
- * field-restricted enforcement that makes that safe. touch() is the only
- * write path; it's debounced so viewing the dashboard doesn't write on every
- * render/snapshot.
+ * field-restricted enforcement that makes that safe. touch() and
+ * markExported() are the only write paths, and both setDoc with
+ * { merge: true } — a non-merge setDoc would replace the whole document and
+ * silently wipe whichever of the two fields it doesn't set. touch() is
+ * debounced so viewing the dashboard doesn't write on every render/snapshot;
+ * markExported() is not — it fires once per explicit user export action.
  *
  * DECISION (2026-07): one shared lastSeenAt for the whole dashboard, not one
  * per tab (e.g. lastSeenAtCalls / lastSeenAtLeads). Leads is already a filtered
@@ -19,7 +22,9 @@
  * today. A single field is the smaller thing that works (§1 lean-first); if a
  * genuine need for independent tab freshness shows up later, this doc can grow
  * a second field (e.g. lastSeenAtLeads) without a migration — existing readers
- * of lastSeenAt are unaffected.
+ * of lastSeenAt are unaffected. The same reasoning applies to lastExportAt,
+ * added alongside it as a single shared "new since your last download"
+ * watermark for both the Calls and Leads export buttons.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -32,15 +37,20 @@ const TOUCH_DEBOUNCE_MS = 3000;
 
 interface UseLastSeenResult {
   lastSeenAt: Date | null;
+  lastExportAt: Date | null;
   loading: boolean;
   // Marks "seen now" (serverTimestamp()), debounced. Safe to call on every
   // render of the dashboard shell.
   touch: () => void;
+  // Marks "exported now" (serverTimestamp()), not debounced — call once per
+  // explicit export action (CSV/XLSX button click).
+  markExported: () => void;
 }
 
 export function useLastSeen(): UseLastSeenResult {
   const { user } = useAuth();
   const [lastSeenAt, setLastSeenAt] = useState<Date | null>(null);
+  const [lastExportAt, setLastExportAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const accountIdRef = useRef<string | null>(null);
   const uidRef = useRef<string | null>(null);
@@ -49,6 +59,7 @@ export function useLastSeen(): UseLastSeenResult {
   useEffect(() => {
     if (!user) {
       setLastSeenAt(null);
+      setLastExportAt(null);
       setLoading(false);
       accountIdRef.current = null;
       uidRef.current = null;
@@ -81,12 +92,14 @@ export function useLastSeen(): UseLastSeenResult {
           (snap) => {
             const data = snap.data();
             setLastSeenAt(data?.lastSeenAt?.toDate() ?? null);
+            setLastExportAt(data?.lastExportAt?.toDate() ?? null);
             setLoading(false);
           },
           () => {
             // Missing/denied reads just mean "no badge yet" — not surfaced as
             // a page-level error, since this is a secondary UX affordance.
             setLastSeenAt(null);
+            setLastExportAt(null);
             setLoading(false);
           },
         );
@@ -109,13 +122,30 @@ export function useLastSeen(): UseLastSeenResult {
       const uid = uidRef.current;
       if (!accountId || !uid) return;
       // setDoc (not updateDoc): the doc may not exist yet on a user's first
-      // ever visit, and the field set is identical either way. Rules restrict
-      // this write to exactly {lastSeenAt} regardless.
-      void setDoc(doc(db, userStatePath(accountId, uid)), {
-        lastSeenAt: serverTimestamp(),
-      });
+      // ever visit, and the field set is identical either way. { merge: true }
+      // so this write doesn't wipe lastExportAt on the same doc. Rules restrict
+      // the resulting document to keys within {lastSeenAt, lastExportAt}.
+      void setDoc(
+        doc(db, userStatePath(accountId, uid)),
+        { lastSeenAt: serverTimestamp() },
+        { merge: true },
+      );
     }, TOUCH_DEBOUNCE_MS);
   }, []);
 
-  return { lastSeenAt, loading, touch };
+  const markExported = useCallback(() => {
+    const accountId = accountIdRef.current;
+    const uid = uidRef.current;
+    if (!accountId || !uid) return;
+    // Not debounced: fires once per explicit export click, not on every
+    // render, so there's no burst to collapse. { merge: true } so this write
+    // doesn't wipe lastSeenAt on the same doc.
+    void setDoc(
+      doc(db, userStatePath(accountId, uid)),
+      { lastExportAt: serverTimestamp() },
+      { merge: true },
+    );
+  }, []);
+
+  return { lastSeenAt, lastExportAt, loading, touch, markExported };
 }

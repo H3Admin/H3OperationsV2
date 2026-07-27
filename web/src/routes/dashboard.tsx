@@ -51,7 +51,7 @@ function DashboardLayout() {
   const nav = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { calls, loading, error } = useCalls();
-  const { lastSeenAt, touch } = useLastSeen();
+  const { lastSeenAt, touch, lastExportAt, markExported } = useLastSeen();
   const [dateRange, setDateRange] = useState<DateRange>({ start: "", end: "" });
 
   // Feature gate: null = still checking, true = enabled, false = denied.
@@ -121,7 +121,17 @@ function DashboardLayout() {
 
   return (
     <DashboardContext.Provider
-      value={{ calls, loading, error, dateRange, setDateRange, newCallsCount, newLeadsCount }}
+      value={{
+        calls,
+        loading,
+        error,
+        dateRange,
+        setDateRange,
+        newCallsCount,
+        newLeadsCount,
+        lastExportAt,
+        markExported,
+      }}
     >
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="flex items-center gap-1 rounded-full border border-input bg-muted/50 p-1">

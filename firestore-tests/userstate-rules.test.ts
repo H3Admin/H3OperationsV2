@@ -8,7 +8,7 @@
  *   1. a user CAN read/write their OWN userState/{uid} doc
  *   2. a user CANNOT write another member's userState/{otherUid} doc, same account
  *   3. a user CANNOT read/write userState in a DIFFERENT account (tenant isolation)
- *   4. a write containing any field other than lastSeenAt is rejected
+ *   4. a write containing any field other than lastSeenAt/lastExportAt is rejected
  *
  * Reads the REAL firestore.rules via readFileSync — no rules copy to drift. Runs
  * against the Firestore emulator; invoke through `npm run test:rules` at the repo
@@ -148,6 +148,36 @@ describe("userState rule — field restriction", () => {
         lastSeenAt: new Date(),
         role: "owner",
       }),
+    );
+  });
+
+  test("write containing only lastExportAt succeeds", async () => {
+    const db = asUserA();
+    await assertSucceeds(
+      setDoc(doc(db, `accounts/${ACCOUNT_A}/userState/${USER_A}`), {
+        lastExportAt: new Date(),
+      }),
+    );
+  });
+
+  test("write containing both lastSeenAt and lastExportAt succeeds", async () => {
+    const db = asUserA();
+    await assertSucceeds(
+      setDoc(doc(db, `accounts/${ACCOUNT_A}/userState/${USER_A}`), {
+        lastSeenAt: new Date(),
+        lastExportAt: new Date(),
+      }),
+    );
+  });
+
+  test("merge write of lastExportAt onto the seeded lastSeenAt doc succeeds", async () => {
+    const db = asUserA();
+    await assertSucceeds(
+      setDoc(
+        doc(db, `accounts/${ACCOUNT_A}/userState/${USER_A}`),
+        { lastExportAt: new Date() },
+        { merge: true },
+      ),
     );
   });
 });

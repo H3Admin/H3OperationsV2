@@ -17,20 +17,31 @@ export const Route = createFileRoute("/dashboard/calls/")({
 });
 
 function CallsPage() {
-  const { calls, loading, error, dateRange } = useDashboardContext();
+  const { calls, loading, error, dateRange, lastExportAt, markExported } =
+    useDashboardContext();
   const filtered = useMemo(
     () => filterByDateRange(calls, dateRange),
     [calls, dateRange],
   );
 
+  const newSinceExport = useMemo(() => {
+    if (!lastExportAt) return 0;
+    return filtered.filter((call) => {
+      const startedAt = call.startedAt?.toDate();
+      return !!startedAt && startedAt > lastExportAt;
+    }).length;
+  }, [filtered, lastExportAt]);
+
   const exportCsv = () => {
     const today = new Date().toISOString().slice(0, 10);
     downloadCsv(`calls-${today}.csv`, callsToCsv(filtered));
+    markExported();
   };
 
   const exportXlsx = () => {
     const today = new Date().toISOString().slice(0, 10);
     downloadXlsx(`calls-${today}.xlsx`, callsToXlsxWorkbook(filtered));
+    markExported();
   };
 
   return (
@@ -45,21 +56,28 @@ function CallsPage() {
           </p>
         </div>
         {!loading && !error && filtered.length > 0 && (
-          <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="shrink-0 rounded-full border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
-            >
-              Export CSV
-            </button>
-            <button
-              type="button"
-              onClick={exportXlsx}
-              className="shrink-0 rounded-full border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
-            >
-              Export XLSX
-            </button>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={exportCsv}
+                className="shrink-0 rounded-full border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
+              >
+                Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={exportXlsx}
+                className="shrink-0 rounded-full border border-input px-3 py-1.5 text-xs font-semibold text-foreground"
+              >
+                Export XLSX
+              </button>
+            </div>
+            {newSinceExport > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {newSinceExport} new since your last download
+              </p>
+            )}
           </div>
         )}
       </div>

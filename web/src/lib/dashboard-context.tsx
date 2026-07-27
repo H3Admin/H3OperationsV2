@@ -23,6 +23,10 @@ export interface DashboardContextValue {
   // useLastSeen's DECISION note) so both tabs agree on what counts as new.
   newCallsCount: number;
   newLeadsCount: number;
+  // "New since your last download" export watermark, backing the Calls/Leads
+  // export-button hint. Same shared-timestamp reasoning as lastSeenAt above.
+  lastExportAt: Date | null;
+  markExported: () => void;
 }
 
 export const DashboardContext = createContext<DashboardContextValue | null>(null);

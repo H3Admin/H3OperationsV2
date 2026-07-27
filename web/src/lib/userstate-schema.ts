@@ -6,8 +6,9 @@
  * firestore.rules, which restricts the write to the caller's own doc and to
  * the lastSeenAt field only), so this file is both the read and write shape.
  *
- * One field today: lastSeenAt. See DECISION in useLastSeen.ts for why this is
- * a single shared timestamp rather than one per tab.
+ * Two fields today: lastSeenAt and lastExportAt. See DECISION in
+ * useLastSeen.ts for why each is a single shared timestamp rather than one
+ * per tab.
  */
 
 // Firestore path for a user's per-account dashboard state doc. Doc id is the
@@ -22,4 +23,5 @@ export function userStatePath(accountId: string, uid: string): string {
 // loosely for the UI, matching calls-schema.ts / customers-schema.ts.
 export interface UserState {
   lastSeenAt: { toDate: () => Date } | null;
+  lastExportAt: { toDate: () => Date } | null;
 }
