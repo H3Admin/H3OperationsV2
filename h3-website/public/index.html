@@ -46,6 +46,9 @@
   .nav a{color:var(--muted);text-decoration:none;}
   .nav a:hover{color:var(--navy);}
   @media (max-width:720px){.nav{display:none;}}
+  .topbar-actions{display:flex;align-items:center;gap:14px;flex:none;}
+  .signin-link{font-family:'Space Grotesk',system-ui,sans-serif;font-weight:600;font-size:13.5px;color:var(--navy);text-decoration:none;white-space:nowrap;padding:9px 6px;border-radius:8px;}
+  .signin-link:hover{color:var(--blue);}
   .btn{font-family:'Space Grotesk';font-weight:600;font-size:14.5px;border-radius:11px;padding:11px 20px;border:1.5px solid transparent;cursor:pointer;text-decoration:none;display:inline-block;transition:transform .15s ease, background .15s ease;}
   .btn-primary{background:var(--navy);color:#fff;}
   .btn-primary:hover{background:#0d3358;transform:translateY(-1px);}
@@ -160,7 +163,10 @@
         <a href="#roadmap">Coming soon</a>
         <a href="#signup">Get started</a>
       </nav>
-      <a class="btn btn-primary" href="#signup" style="padding:9px 18px;font-size:13.5px;">Get started</a>
+      <div class="topbar-actions">
+        <a class="signin-link" href="https://h3operations-app.web.app/login">Sign in</a>
+        <a class="btn btn-primary" href="#signup" style="padding:9px 18px;font-size:13.5px;">Get started</a>
+      </div>
     </div>
   </div>
 
@@ -352,6 +358,7 @@
     <div class="wrap">
       <div class="logo"><span class="mark"></span>H3 Operations</div>
       <div class="flinks">
+        <a href="https://h3operations-app.web.app/login">Sign in</a>
         <a href="/privacy/">Privacy Policy</a>
         <a href="/terms/">Terms of Service</a>
         <a href="/sms-optin/">SMS Opt-In</a>
