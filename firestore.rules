@@ -114,5 +114,16 @@ service cloud.firestore {
     match /phoneUsage/{day} {
       allow read, write: if false;
     }
+
+    // Operator Dashboard audit trail (Phase 1, Stage B). Root-level, NOT
+    // tenant-scoped: an operator action (e.g. list_accounts) can span every
+    // tenant at once, so this isn't tenant-owned data. Append-only, written
+    // ONLY via writeOperatorAudit (Admin SDK, bypasses these Rules) from the
+    // operatorListAccounts/operatorGetAccount callables. No client — operator
+    // or otherwise — gets read or write access; this is a server-only audit
+    // log, not a dashboard data source.
+    match /operatorAuditLog/{id} {
+      allow read, write: if false;
+    }
   }
 }

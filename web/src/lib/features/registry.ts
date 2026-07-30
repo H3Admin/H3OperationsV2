@@ -50,6 +50,17 @@ export const FEATURE_REGISTRY = {
     scope: "account",
     lifecycle: "beta",
   },
+  operator_dashboard: {
+    key: "operator_dashboard",
+    description: "H3 Operator Dashboard — internal cross-tenant admin surface.",
+    defaultEnabled: false,
+    // "global" because FeatureScope has no role axis — the real gate is the
+    // operator claim enforced server-side by the operatorListAccounts /
+    // operatorGetAccount callables (functions/src/operator/callables.ts) plus
+    // the client-side route guard on /operator, not this flag.
+    scope: "global",
+    lifecycle: "in_development",
+  },
 } as const satisfies Record<string, FeatureDef>;
 
 /** Union of all registered flag keys — the type every consumer uses. */
