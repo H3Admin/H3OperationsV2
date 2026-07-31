@@ -4,9 +4,9 @@ import { assertOperator } from "./permissions.js";
 import { writeOperatorAudit } from "./auditLog.js";
 
 /**
- * callables — Operator Dashboard read-only callables (Phase 1, Stage B).
+ * callables — Operator Dashboard callables (Phase 1, Stage B).
  *
- * Both callables below are operator-only (assertOperator, §8 S2/S3) and
+ * All callables below are operator-only (assertOperator, §8 S2/S3) and
  * cross-tenant by design — the entire point of the Operator Dashboard is
  * H3-staff visibility across accounts, which is why these live outside the
  * accounts/{accountId} isolation model that every tenant-facing callable
@@ -15,11 +15,16 @@ import { writeOperatorAudit } from "./auditLog.js";
  * SECURITY: account documents today carry NO fields of their own — they are
  * created via `accounts.add({})` (see onUserCreate) and never written to
  * thereafter. There is no businessName/name/status/createdAt to read. Rather
- * than inventing fields that don't exist, these callables return only what is
- * real: the accountId (the doc ID) and a memberCount derived from the
- * members subcollection. Do NOT expand this to customer/call/PII data without
- * a fresh minimum-necessary review.
+ * than inventing fields that don't exist, operatorListAccounts/
+ * operatorGetAccount return only what is real: the accountId (the doc ID)
+ * and a memberCount derived from the members subcollection. Do NOT expand
+ * this to customer/call/PII data without a fresh minimum-necessary review.
  */
+
+// Mirrors index.ts's module-private VALID_ROLES (functions/src/index.ts) —
+// not exported there, so duplicated here rather than reached into. Keep in
+// sync: onUserCreate's invite branch rejects any role outside this set.
+const VALID_ROLES = ["owner", "admin", "member"];
 
 export interface OperatorAccountSummary {
   accountId: string;
@@ -91,4 +96,55 @@ export const operatorGetAccount = functions.https.onCall(async (data, context) =
   });
 
   return { account: summary };
+});
+
+/**
+ * operatorCreateInvite — concierge on-ramp: creates a fresh account and a
+ * pending invite for a subscriber's first login, so onUserCreate's invite
+ * branch (functions/src/index.ts) attaches them to THIS account/role rather
+ * than minting a second new one via its no-invite fallback.
+ *
+ * Same empty-doc shape onUserCreate's self-serve path already uses
+ * (`accounts.add({})`) — no fields invented here either (see module header).
+ * email is lowercased ONLY (no trim/other transform) to match onUserCreate's
+ * `normalizedEmail = email.toLowerCase()` exactly, since onUserCreate's
+ * lookup is an equality match against this stored value (§8 S2).
+ */
+export const operatorCreateInvite = functions.https.onCall(async (data, context) => {
+  const { uid, roles } = assertOperator(context);
+  const db = admin.firestore();
+
+  const rawEmail = (data?.email ?? "") as string;
+  if (!rawEmail) {
+    throw new functions.https.HttpsError("invalid-argument", "email is required.");
+  }
+  const email = rawEmail.toLowerCase();
+
+  const role = (data?.role ?? "owner") as string;
+  if (!VALID_ROLES.includes(role)) {
+    throw new functions.https.HttpsError("invalid-argument", `role must be one of ${VALID_ROLES.join(", ")}.`);
+  }
+
+  const accountRef = await db.collection("accounts").add({});
+  const accountId = accountRef.id;
+
+  const inviteRef = db.collection("invites").doc();
+  await inviteRef.set({
+    email,
+    accountId,
+    role,
+    status: "pending",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdBy: uid,
+  });
+
+  await writeOperatorAudit(db, {
+    actorUid: uid,
+    roles,
+    action: "create_invite",
+    targetAccountId: accountId,
+    targetRef: inviteRef.id,
+  });
+
+  return { accountId, inviteId: inviteRef.id };
 });

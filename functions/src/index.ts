@@ -8,7 +8,7 @@ import jobsSchema from "./schema/jobs.js";
 import smsOptinsSchema from "./schema/smsOptins.js";
 import signupRequestsSchema from "./schema/signupRequests.js";
 import checklistRequestsSchema from "./schema/checklistRequests.js";
-import { operatorListAccounts, operatorGetAccount } from "./operator/callables.js";
+import { operatorListAccounts, operatorGetAccount, operatorCreateInvite } from "./operator/callables.js";
 
 admin.initializeApp();
 
@@ -926,7 +926,7 @@ export const updateJob = functions.https.onCall(async (data, context) => {
   return { jobId };
 });
 
-export { operatorListAccounts, operatorGetAccount };
+export { operatorListAccounts, operatorGetAccount, operatorCreateInvite };
 
 // Origins allowed to call submitSmsOptin from a browser. The consent form is a
 // static page on the marketing site; reflect an allowlisted Origin back so we
